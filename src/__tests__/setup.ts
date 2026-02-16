@@ -1,5 +1,6 @@
 import { beforeEach, afterEach } from 'bun:test';
 import { resetConfig } from '../config';
+import type { Task, InterviewDraft, InterviewFindings } from '../types/index';
 
 // Global test setup - reset config between tests
 beforeEach(() => {
@@ -9,6 +10,40 @@ beforeEach(() => {
 afterEach(() => {
   resetConfig();
 });
+
+export function makeTask(overrides?: Partial<Task>): Task {
+  return {
+    id: 'task-1',
+    description: 'Test task',
+    acceptanceCriteria: ['criterion 1'],
+    estimatedComplexity: 3,
+    dependencies: [],
+    status: 'pending',
+    ...overrides,
+  };
+}
+
+export function makeDraft(overrides?: Partial<InterviewFindings>): InterviewDraft {
+  const findings: InterviewFindings = {
+    intent: 'mid-sized',
+    userGoal: 'A sufficiently detailed user goal for testing',
+    confirmedRequirements: ['requirement 1'],
+    scopeInclusions: ['include this'],
+    scopeExclusions: ['exclude that'],
+    technicalDecisions: { approach: 'standard' },
+    constraints: ['constraint 1'],
+    assumptions: ['assumption 1'],
+    openQuestions: [],
+    ...overrides,
+  };
+  return {
+    name: 'test-draft',
+    planId: 'test-plan-id',
+    created: new Date().toISOString(),
+    lastUpdated: new Date().toISOString(),
+    findings,
+  };
+}
 
 // Test fixtures for reuse across test files
 export const validLinearConfig = {
