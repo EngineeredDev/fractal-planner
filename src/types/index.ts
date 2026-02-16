@@ -114,6 +114,7 @@ export interface InterviewFindings {
 // Draft file structure
 export interface InterviewDraft {
   name: string;
+  planId?: string;
   created: string;
   lastUpdated: string;
   findings: InterviewFindings;

@@ -13,23 +13,36 @@ import type { InterviewDraft, InterviewFindings, IntentType } from '../types/ind
 const DRAFTS_DIR = '.fractal-planner/plans';
 
 /**
+ * Generate a timestamp-based plan ID (YYYYMMDD-HHmmss)
+ */
+function generatePlanId(): string {
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+}
+
+/**
  * Create a new draft file for an interview session
  */
 export async function createDraft(
   name: string,
   userGoal: string,
-  intent: IntentType
-): Promise<string> {
+  intent: IntentType,
+  planId?: string
+): Promise<{ draftPath: string; planId: string }> {
+  const resolvedPlanId = planId ?? generatePlanId();
   const slug = name.toLowerCase().replace(/\s+/g, '-');
-  const draftPath = join(process.cwd(), DRAFTS_DIR, `${slug}.json`);
+  const planDir = join(process.cwd(), DRAFTS_DIR, resolvedPlanId);
+  const draftPath = join(planDir, `${slug}.json`);
 
-  // Ensure directory exists
-  if (!existsSync(join(process.cwd(), DRAFTS_DIR))) {
-    await mkdir(join(process.cwd(), DRAFTS_DIR), { recursive: true });
+  // Ensure plan subdirectory exists
+  if (!existsSync(planDir)) {
+    await mkdir(planDir, { recursive: true });
   }
 
   const draft: InterviewDraft = {
     name,
+    planId: resolvedPlanId,
     created: new Date().toISOString(),
     lastUpdated: new Date().toISOString(),
     findings: {
@@ -46,7 +59,7 @@ export async function createDraft(
   };
 
   await writeFile(draftPath, JSON.stringify(draft, null, 2));
-  return draftPath;
+  return { draftPath, planId: resolvedPlanId };
 }
 
 /**

@@ -18,8 +18,9 @@ import type { InterviewFindings, IntentType, QuestionStrategy } from '../types/i
  * Runs until clearance check passes
  */
 export async function runInterviewPhase(
-  userGoal: string
-): Promise<{ findings: InterviewFindings; draftPath: string }> {
+  userGoal: string,
+  planId?: string
+): Promise<{ findings: InterviewFindings; draftPath: string; planId: string }> {
   console.log('🔍 [DEBUG] runInterviewPhase called with:', userGoal);
   console.log('  💬 Starting interview phase...\n');
 
@@ -28,7 +29,7 @@ export async function runInterviewPhase(
   console.log(`  Detected intent: ${intent}\n`);
 
   // Step 2: Create draft file
-  const draftPath = await createDraft('interview', userGoal, intent);
+  const { draftPath, planId: resolvedPlanId } = await createDraft('interview', userGoal, intent, planId);
   console.log(`  Draft created: ${draftPath}\n`);
 
   // Step 3: Get question strategy
@@ -41,7 +42,7 @@ export async function runInterviewPhase(
   const findings = await conductInterviewWithAgent(interviewPrompt, draftPath);
 
   console.log('  ✅ Interview complete!\n');
-  return { findings, draftPath };
+  return { findings, draftPath, planId: resolvedPlanId };
 }
 
 /**

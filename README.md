@@ -93,7 +93,7 @@ Once installed, use the `/fractal-planner` command in Claude Code:
   - ✓ No critical ambiguities
   - ✓ Technical approach decided
   - ✓ No blocking questions
-- **Draft Persistence**: Maintains interview findings in `.fractal-planner/plans/`
+- **Draft Persistence**: Maintains interview findings in `.fractal-planner/plans/{planId}/`
 - **Gap Analysis**: Identifies missing context and suggests clarifying questions
 - **Intent-Specific Strategies**: Adapts questioning approach based on task type
 
