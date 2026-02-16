@@ -6,12 +6,15 @@
  */
 
 import { query } from '@anthropic-ai/claude-agent-sdk';
-import type { ResearchFindings, InterviewFindings } from '../types/index.js';
+import type { ResearchFindings, InterviewFindings, FractalPlannerConfig } from '../types/index.js';
+import { getConfig } from '../config.js';
 
 export async function runResearchPhase(
   userGoal: string,
-  interviewFindings?: InterviewFindings
+  interviewFindings?: InterviewFindings,
+  config?: Partial<FractalPlannerConfig>
 ): Promise<ResearchFindings> {
+  const cfg = { ...getConfig(), ...config };
   console.log('  🔍 Starting codebase analysis...');
 
   // Build enhanced prompt using interview findings
@@ -76,7 +79,7 @@ Be specific with file paths and line numbers in your findings.
       prompt: researchPrompt,
       options: {
         allowedTools: ['Read', 'Glob', 'Grep'],
-        permissionMode: 'default'
+        permissionMode: cfg.permissionMode
       }
     })) {
       // Parse assistant messages for findings

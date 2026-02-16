@@ -9,8 +9,7 @@ import { writeFile, readFile, mkdir } from 'fs/promises';
 import { existsSync } from 'fs';
 import { join } from 'path';
 import type { InterviewDraft, InterviewFindings, IntentType } from '../types/index.js';
-
-const DRAFTS_DIR = '.fractal-planner/plans';
+import { getConfig } from '../config.js';
 
 /**
  * Generate a timestamp-based plan ID (YYYYMMDD-HHmmss)
@@ -28,11 +27,13 @@ export async function createDraft(
   name: string,
   userGoal: string,
   intent: IntentType,
-  planId?: string
+  planId?: string,
+  plansDir?: string
 ): Promise<{ draftPath: string; planId: string }> {
   const resolvedPlanId = planId ?? generatePlanId();
   const slug = name.toLowerCase().replace(/\s+/g, '-');
-  const planDir = join(process.cwd(), DRAFTS_DIR, resolvedPlanId);
+  const resolvedPlansDir = plansDir ?? getConfig().plansDir;
+  const planDir = join(process.cwd(), resolvedPlansDir, resolvedPlanId);
   const draftPath = join(planDir, `${slug}.json`);
 
   // Ensure plan subdirectory exists

@@ -6,16 +6,19 @@
  */
 
 import { query } from '@anthropic-ai/claude-agent-sdk';
-import type { Task } from '../types/index.js';
+import type { Task, FractalPlannerConfig } from '../types/index.js';
+import { getConfig } from '../config.js';
 
 /**
  * Recursively decompose a task into subtasks
  */
 export async function decomposeTask(
   task: Task,
-  maxComplexity: number = 4,
+  config?: Partial<FractalPlannerConfig>,
   depth: number = 0
 ): Promise<Task> {
+  const cfg = { ...getConfig(), ...config };
+  const maxComplexity = cfg.maxComplexity;
   // Base case: task is simple enough
   if (task.estimatedComplexity <= maxComplexity) {
     console.log(`  ${'  '.repeat(depth)}✓ Task ${task.id} is manageable (complexity: ${task.estimatedComplexity})`);
@@ -65,7 +68,7 @@ achievable by a single agent without getting lost or running out of context.
       prompt: decompositionPrompt,
       options: {
         allowedTools: ['Read', 'Grep'],
-        permissionMode: 'default'
+        permissionMode: cfg.permissionMode
       }
     })) {
       if (message.type === 'assistant' && message.message?.content) {
@@ -100,7 +103,7 @@ achievable by a single agent without getting lost or running out of context.
 
   // Recursively decompose each subtask
   const decomposedSubtasks = await Promise.all(
-    subtasks.map(st => decomposeTask(st, maxComplexity, depth + 1))
+    subtasks.map(st => decomposeTask(st, config, depth + 1))
   );
 
   task.subtasks = decomposedSubtasks;

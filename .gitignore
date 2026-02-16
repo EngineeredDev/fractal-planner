@@ -38,3 +38,4 @@ temp/
 
 # Fractal Planner drafts
 .fractal-planner/
+!.fractal-planner/config.json

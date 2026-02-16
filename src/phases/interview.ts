@@ -11,7 +11,8 @@ console.log('🔍 [DEBUG] interview.ts module loaded');
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { createDraft, readDraft } from '../utils/draft.js';
 import { classifyIntent, getQuestionStrategy } from '../utils/question-strategies.js';
-import type { InterviewFindings, IntentType, QuestionStrategy } from '../types/index.js';
+import type { InterviewFindings, IntentType, QuestionStrategy, FractalPlannerConfig } from '../types/index.js';
+import { getConfig } from '../config.js';
 
 /**
  * Interview Phase - Iterative clarification loop
@@ -19,7 +20,8 @@ import type { InterviewFindings, IntentType, QuestionStrategy } from '../types/i
  */
 export async function runInterviewPhase(
   userGoal: string,
-  planId?: string
+  planId?: string,
+  config?: Partial<FractalPlannerConfig>
 ): Promise<{ findings: InterviewFindings; draftPath: string; planId: string }> {
   console.log('🔍 [DEBUG] runInterviewPhase called with:', userGoal);
   console.log('  💬 Starting interview phase...\n');
@@ -39,7 +41,8 @@ export async function runInterviewPhase(
   const interviewPrompt = buildInterviewPrompt(userGoal, intent, strategy, draftPath);
   console.log('  🤖 Launching interview agent...\n');
 
-  const findings = await conductInterviewWithAgent(interviewPrompt, draftPath);
+  const cfg = { ...getConfig(), ...config };
+  const findings = await conductInterviewWithAgent(interviewPrompt, draftPath, cfg);
 
   console.log('  ✅ Interview complete!\n');
   return { findings, draftPath, planId: resolvedPlanId };
@@ -50,14 +53,15 @@ export async function runInterviewPhase(
  */
 async function conductInterviewWithAgent(
   prompt: string,
-  draftPath: string
+  draftPath: string,
+  cfg: FractalPlannerConfig
 ): Promise<InterviewFindings> {
   try {
     for await (const message of query({
       prompt,
       options: {
         allowedTools: ['AskUserQuestion', 'Read', 'Write', 'Edit'],
-        permissionMode: 'default'
+        permissionMode: cfg.permissionMode
       }
     })) {
       // Agent will use AskUserQuestion to gather requirements

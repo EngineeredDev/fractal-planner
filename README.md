@@ -71,6 +71,39 @@ Once installed, use the `/fractal-planner` command in Claude Code:
 /fractal-planner --max-complexity 3 Refactor authentication module
 ```
 
+## Configuration
+
+Fractal Planner uses a layered JSON config system. Settings are merged in this order (highest priority wins):
+
+1. **Runtime overrides** (CLI flags)
+2. **Project config** — `.fractal-planner/config.json` in your project root
+3. **User config** — `$XDG_CONFIG_HOME/fractal-planner/config.json` (defaults to `~/.config/fractal-planner/config.json`)
+4. **Built-in defaults**
+
+All fields are optional. Only include the values you want to override:
+
+```json
+{
+  "maxComplexity": 3,
+  "permissionMode": "bypassPermissions"
+}
+```
+
+### Available Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `maxComplexity` | `1-10` | `5` | Complexity threshold for task decomposition — tasks above this are broken down further |
+| `maxIterations` | `integer >= 1` | `3` | Max builder/verifier loops per task before giving up |
+| `researchOnly` | `boolean` | `false` | Stop after the research phase |
+| `planOnly` | `boolean` | `false` | Stop after planning, skip execution |
+| `enableAgentTeams` | `boolean` | `true` | Use builder/verifier agent teams for execution |
+| `noCommit` | `boolean` | `false` | Skip automatic git commits after task completion |
+| `plansDir` | `string` | `".fractal-planner/plans"` | Directory for plan artifacts |
+| `permissionMode` | `string` | `"default"` | Permission mode passed to the Claude Agent SDK. One of: `default`, `acceptEdits`, `bypassPermissions`, `plan`, `delegate`, `dontAsk` |
+
+Invalid values are caught at startup with a clear error message — for example, setting `permissionMode` to an unrecognized value will tell you exactly which file and field is wrong.
+
 ## Requirements
 
 - Claude Code >= 2.1.32

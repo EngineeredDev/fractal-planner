@@ -5,6 +5,7 @@
  */
 
 export * from './types/index.js';
+export * from './config.js';
 export * from './phases/interview.js';
 export * from './phases/research.js';
 export * from './phases/decomposition.js';

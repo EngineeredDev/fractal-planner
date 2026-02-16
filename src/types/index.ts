@@ -49,13 +49,7 @@ export interface VerificationReport {
   suggestions?: string[];
 }
 
-export interface FractalPlannerConfig {
-  maxComplexity: number;
-  maxIterations: number;
-  researchOnly: boolean;
-  planOnly: boolean;
-  enableAgentTeams: boolean;
-}
+export type { FractalPlannerConfig, FractalPlannerConfigFile } from '../config.js';
 
 export interface AgentMessage {
   role: 'builder' | 'verifier' | 'orchestrator';
