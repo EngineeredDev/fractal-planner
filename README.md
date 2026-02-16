@@ -147,10 +147,13 @@ Add a `linear` block to your project config (`.fractal-planner/config.json`):
   "linear": {
     "enabled": true,
     "teamId": "your-team-uuid",
-    "projectId": "your-project-uuid"
+    "projectId": "your-project-uuid",
+    "userId": "your-user-uuid-or-email"
   }
 }
 ```
+
+The `userId` field is optional and can be a Linear user UUID, email address, or `"me"` for the authenticated user. When set, all created issues will be assigned to this user.
 
 Status mapping is auto-detected from your team's workflow states by default. To override, add a `statusMap`:
 

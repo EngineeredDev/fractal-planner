@@ -179,15 +179,31 @@ If Linear is enabled:
      - `failed` → first status of type `canceled`
    - Store the resolved status UUIDs for each fractal-planner status.
 
-3. **Create Linear issues**: Walk the task tree **top-down** (BFS or pre-order DFS) so parent issue IDs are available when creating children. For each task, call `mcp__linear-server__create_issue`:
-   - `title`: `[FP-{task.id}] {task.description}`
+3. **Preview & confirm**: Before creating any issues, present the user with a summary of all planned issues using `AskUserQuestion`:
+   - Build a bulleted list from the task tree, using indentation to reflect hierarchy:
+     ```
+     Will create {N} issues in team {teamId}{project ? ", project " + projectName : ""}:
+     - Root task description (parent)
+       - Subtask 1.1 description (parent)
+         - Subtask 1.1.1 description (leaf)
+         - Subtask 1.1.2 description (leaf)
+       - Subtask 1.2 description (leaf)
+     ```
+   - Label each task as `(parent)` or `(leaf)` so the user knows which are containers vs. actionable work
+   - Options: **"Create these issues"** / **"I want to make changes first"**
+   - If the user picks "I want to make changes first", ask what they'd like to change, adjust the task list accordingly, and re-present the summary for confirmation
+   - Only proceed to step 4 after the user explicitly approves with "Create these issues"
+
+4. **Create Linear issues**: Walk the task tree **top-down** (BFS or pre-order DFS) so parent issue IDs are available when creating children. Create issues **one at a time, in implementation order** (the order tasks should be worked on). This ensures `createdAt` ordering in Linear reflects the intended task sequence. Within each level, create tasks in their defined order before descending to children. For each task, call `mcp__linear-server__create_issue`:
+   - `title`: `{task.description}`
    - `team`: config `linear.teamId`
    - `project`: config `linear.projectId` (if set)
+   - `assignee`: config `linear.userId` (if set)
    - `parentId`: Linear issue ID of the parent task (omit for root)
    - `state`: resolved "pending" status ID
    - `description`: For **leaf tasks**, include acceptance criteria as a markdown checklist, dependencies, and files to modify. For **non-leaf tasks**, include a summary noting it's a parent container.
 
-4. **Write mapping file**: Save `.fractal-planner/plans/${CLAUDE_SESSION_ID}/linear-mapping.json`:
+5. **Write mapping file**: Save `.fractal-planner/plans/${CLAUDE_SESSION_ID}/linear-mapping.json`:
    ```json
    {
      "planId": "${CLAUDE_SESSION_ID}",
@@ -207,7 +223,7 @@ If Linear is enabled:
    }
    ```
 
-5. **Log summary**: "Created {N} Linear issues under team {teamId}" with a list of issue identifiers.
+6. **Log summary**: "Created {N} Linear issues under team {teamId}" with a list of issue identifiers.
 
 ### Phase 3: Implementation Planning 📋
 

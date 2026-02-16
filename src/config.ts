@@ -20,6 +20,7 @@ const LinearConfigSchema = z.object({
   enabled:   z.boolean().default(false),
   teamId:    z.string().optional(),
   projectId: z.string().optional(),
+  userId:    z.string().optional(),
   statusMap: z.object({
     pending:         z.string(),
     'in-progress':   z.string(),
