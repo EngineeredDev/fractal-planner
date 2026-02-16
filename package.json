@@ -26,7 +26,7 @@
     "url": "https://github.com/yourusername/fractal-planner.git"
   },
   "scripts": {
-    "build": "bun build ./src/index.ts --outdir dist --target node --format esm && bun build ./skills/fractal-planner/skill.ts --outdir skills/fractal-planner --target node --format esm && tsc --emitDeclarationOnly",
+    "build": "bun build ./src/index.ts --outdir dist --target node --format esm && bun build ./skills/fp/skill.ts --outdir skills/fp --target node --format esm && tsc --emitDeclarationOnly",
     "dev": "tsc --watch",
     "clean": "rm -rf dist && find src skills -type f \\( -name '*.js' -o -name '*.d.ts' -o -name '*.js.map' -o -name '*.d.ts.map' \\) -delete",
     "typecheck": "tsc --noEmit",

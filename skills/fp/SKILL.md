@@ -1,5 +1,5 @@
 ---
-name: fractal-planner
+name: fp:plan
 description: Iterative planning and execution framework with requirements interview, research, decomposition, and builder/verifier teams. Use for complex feature implementation that needs careful planning.
 context: fork
 agent: Plan
