@@ -14,9 +14,16 @@ You are the **team lead** orchestrating implementation of a fractal-planner plan
 Parse `$ARGUMENTS` to extract:
 - `planId` — the first positional argument (required)
 - `--max-iterations N` — optional, defaults to 3
+- `--no-commit` — optional, skip git commits (defaults to false)
+
+Usage examples:
+- `/fp:implement abc123`
+- `/fp:implement abc123 --max-iterations 5`
+- `/fp:implement abc123 --no-commit`
+- `/fp:implement abc123 --max-iterations 5 --no-commit`
 
 If no `planId` is provided, report the error and stop:
-> "Usage: `/fp:implement <plan-session-id> [--max-iterations N]`"
+> "Usage: `/fp:implement <plan-session-id> [--max-iterations N] [--no-commit]`"
 
 Read both plan files from `.fractal-planner/plans/{planId}/`:
 1. `tasks.md` — the task tree
@@ -64,6 +71,9 @@ Display the execution plan to the user:
 
 Create agent team **`fp-impl-{planId}`**.
 
+**IMPORTANT**: When you create the team, you automatically become the team lead with agent name **`team-lead`**.
+This is the name teammates must use when sending you messages via the SendMessage tool.
+
 The builder and verifier are **spawned fresh for each task** (in Step 5) so they start with clean context. The specs below define how to spawn them each time.
 
 ### Spawn Builder Teammate
@@ -82,8 +92,16 @@ RULES:
 - Implement with REAL code only. No stubs, placeholders, TODOs, or "coming soon" comments.
 - If the task metadata says testsRequired: true, write tests.
 - Follow existing codebase patterns and conventions (see Codebase Context above if provided).
+- Track which files you modify (every Write/Edit/creation operation).
 - When implementation is complete, message the "verifier" teammate:
-  "Task {id} implementation complete. Ready for verification."
+  "Task {id} implementation complete. Ready for verification.
+
+  FILES_MODIFIED:
+  - /absolute/path/to/file1.ts
+  - /absolute/path/to/file2.test.ts
+  - /absolute/path/to/component.tsx"
+
+  Include ALL files you created or modified. Use absolute paths.
 - When you receive feedback from the verifier about failures, fix ALL reported issues, then message the verifier again:
   "Fixes applied for task {id}. Ready for re-verification."
 - Do NOT message the lead directly — only message the verifier.
@@ -109,16 +127,18 @@ RULES:
   4. Code follows existing patterns in the codebase (see Codebase Context above if provided)
 - Do NOT use Write or Edit tools — you are read-only plus test runner.
 
-On ALL PASS, message the "lead" (the session):
+On ALL PASS, message the "team-lead":
   VERIFICATION PASSED
   Task: {id}
   Criteria: {N}/{N} passed
   Details:
   - [PASS] criterion 1 description
   - [PASS] criterion 2 description
-  ...
 
-On ANY FAIL, message the "builder" (NOT the lead) with a specific failure report:
+  FILES_MODIFIED:
+  [Copy the entire FILES_MODIFIED section from builder's completion message]
+
+On ANY FAIL, message the "builder" (NOT the team-lead) with a specific failure report:
   VERIFICATION FAILED
   Task: {id}
   Criteria: {passed}/{total} passed
@@ -151,10 +171,10 @@ For each task in the execution order:
 
 3. **Monitor the builder/verifier feedback loop**:
    - Builder implements, messages verifier
-   - Verifier checks, messages builder (fail) or lead (pass)
+   - Verifier checks, messages builder (fail) or team-lead (pass)
    - Track the iteration count for this task
 
-4. **On verification pass** (verifier messages you):
+4. **On verification pass** (verifier messages team-lead):
    - Log: "Task {id} PASSED (iteration {n}/{max})"
    - Record the result
 
@@ -167,6 +187,97 @@ For each task in the execution order:
        - **Stop**: End the implementation run and report current progress
 
 6. **Shut down builder and verifier** before moving to the next task. Send each a shutdown request, wait for confirmation, then proceed to the next task.
+
+## Step 5.5: Create Git Commit (after verification passes)
+
+After verification passes (verifier messages VERIFICATION PASSED), create a git commit BEFORE shutting down teammates.
+
+**Skip this entire step if `--no-commit` flag was set in Step 1.**
+
+### 5.5.1: Parse Files from Verification Report
+
+Extract the FILES_MODIFIED section from the verifier's message using regex:
+- Pattern: `FILES_MODIFIED:\n(- .+\n)+`
+- Extract: list of absolute file paths (one per line after "- ")
+
+**If FILES_MODIFIED is missing**:
+- Log warning: "⚠ Builder did not report files for task {id}"
+- Skip commit (proceed to Step 6)
+
+### 5.5.2: Spawn Committer Teammate
+
+Name: **committer**
+Tools: `Bash`, `Read`, `Grep`
+
+Instructions for committer:
+```
+You are a git commit specialist for the fp-impl-{planId} team.
+
+Follow the fp:commit skill instructions to create ONE git commit for this task.
+
+TASK CONTEXT:
+- Task ID: {id}
+- Description: {description}
+
+FILES_MODIFIED:
+{paste the file list from verifier's message}
+
+INSTRUCTIONS:
+1. Detect commit style from git log (SEMANTIC|PLAIN|SHORT)
+2. Detect language (Korean|English)
+3. Create ONE commit with these files only
+4. Base message on task description, following detected style
+5. Report commit hash when done
+
+Message me with "COMMIT COMPLETED" or "COMMIT FAILED" when finished.
+```
+
+### 5.5.3: Monitor Commit Process
+
+Wait for committer to respond. Expected responses:
+
+**Success**:
+```
+COMMIT COMPLETED
+Task: {id}
+Hash: abc1234
+
+Details:
+abc1234 - feat: add authentication module
+```
+
+Extract commit hash and log: `✓ Task {id} committed as abc1234`
+
+**Failure**:
+```
+COMMIT FAILED
+Task: {id}
+Error: {error description}
+```
+
+On failure, use `AskUserQuestion`:
+- Question: "Git commit failed for task {id}: {error}. How should we proceed?"
+- Options:
+  - "Continue without committing" → Mark task as done, skip commit, continue
+  - "Stop execution" → Halt entire run, report progress
+
+**Skipped**:
+```
+COMMIT SKIPPED (no changes to commit)
+```
+or
+```
+COMMIT SKIPPED (git not found)
+```
+
+Log the skip reason, continue normally.
+
+### 5.5.4: Shut Down Committer
+
+Send shutdown request to committer teammate.
+Wait for confirmation.
+
+**Then proceed to Step 6** (shutdown builder/verifier, move to next task).
 
 ## Step 6: Cleanup & Report
 
@@ -184,11 +295,11 @@ After all tasks are processed (or the user chose to stop):
 - Skipped: {N}/{total} tasks (blocked by failed dependencies)
 
 ### Task Details
-| Task | Status | Iterations | Notes |
-|------|--------|------------|-------|
-| {id} | PASSED | {n}/{max} | {brief note} |
-| {id} | FAILED | {n}/{max} | {failure reason} |
-| {id} | SKIPPED | - | Blocked by {dep} |
+| Task | Status | Iterations | Commit | Notes |
+|------|--------|------------|--------|-------|
+| {id} | PASSED | {n}/{max}  | abc1234 | {brief note} |
+| {id} | FAILED | {n}/{max}  | -      | {failure reason} |
+| {id} | SKIPPED | -         | -      | Blocked by {dep} |
 
 ### Verification Reports
 {For each completed task, include the verifier's pass report}

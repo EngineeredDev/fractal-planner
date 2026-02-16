@@ -188,6 +188,21 @@ Create a detailed execution plan:
       - Acceptance: [Criteria]
    ```
 
+4. **Present next steps** with a copy-pasteable command:
+
+   After presenting the plan summary, always include:
+   ```
+   ## Next Steps
+
+   To start implementation, clear context and run:
+
+   /fp:implement ${CLAUDE_SESSION_ID}
+   ```
+
+   Replace `${CLAUDE_SESSION_ID}` with the actual session ID used for this plan. This gives the user an exact command they can copy/paste.
+
+   If `--plan-only` was specified, stop here after presenting the plan and next steps.
+
 ### Phase 4: Execution ⚙️
 
 **Note**: Full execution with builder/verifier teams requires Agent Teams to be enabled.

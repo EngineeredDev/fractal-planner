@@ -159,13 +159,55 @@ The context is injected into:
 
 ## Communication Protocol Summary
 
+### Standard Flow (without commits)
+
 ```
-Lead ──task──> Builder: single task with id, description, criteria
+Team-Lead ──task──> Builder: single task with id, description, criteria
 Builder ──impl──> Verifier: "Task {id} implementation complete. Ready for verification."
-Verifier ──pass──> Lead: "VERIFICATION PASSED\nTask: {id}\n{report}"
+Verifier ──pass──> Team-Lead: "VERIFICATION PASSED\nTask: {id}\n{report}"
 Verifier ──fail──> Builder: "VERIFICATION FAILED\nTask: {id}\n{failures}\nFix: {instructions}"
 Builder ──fix──> Verifier: "Fixes applied for task {id}. Ready for re-verification."
 (repeat up to max-iterations)
-Verifier ──max-fail──> Lead: "VERIFICATION FAILED after {n} iterations\nTask: {id}\n{report}"
-Lead ──ask──> User: "Task {id} failed. Continue or stop?"
+Verifier ──max-fail──> Team-Lead: "VERIFICATION FAILED after {n} iterations\nTask: {id}\n{report}"
+Team-Lead ──ask──> User: "Task {id} failed. Continue or stop?"
+```
+
+### Extended Flow (with git commits)
+
+```
+Team-Lead ──task──> Builder: single task with id, description, criteria
+Builder ──impl──> Verifier: "Task {id} complete. Ready for verification.\n\nFILES_MODIFIED:\n- /path/to/file1.ts\n- /path/to/file2.ts"
+Verifier ──pass──> Team-Lead: "VERIFICATION PASSED\nTask: {id}\n{report}\n\nFILES_MODIFIED:\n- /path/to/file1.ts\n- /path/to/file2.ts"
+Team-Lead ──task──> Committer: "Create commit for task {id} with files: ..."
+Committer ──commit──> Team-Lead: "COMMIT COMPLETED\nTask: {id}\nHash: abc1234"
+Team-Lead shuts down committer, builder, verifier
+Team-Lead proceeds to next task
+```
+
+### FILES_MODIFIED Message Format
+
+Builder completion message:
+```
+Task {id} implementation complete. Ready for verification.
+
+FILES_MODIFIED:
+- /absolute/path/to/file1.ts
+- /absolute/path/to/file2.test.ts
+- /absolute/path/to/component.tsx
+```
+
+Verifier pass message:
+```
+VERIFICATION PASSED
+Task: {id}
+Criteria: 3/3 passed
+Details:
+- [PASS] criterion 1 description
+- [PASS] criterion 2 description
+- [PASS] criterion 3 description
+
+FILES_MODIFIED:
+- /absolute/path/to/file1.ts
+- /absolute/path/to/file2.test.ts
+- /absolute/path/to/component.tsx
 ```
