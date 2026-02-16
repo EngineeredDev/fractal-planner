@@ -93,7 +93,7 @@ Once installed, use the `/fractal-planner` command in Claude Code:
   - ✓ No critical ambiguities
   - ✓ Technical approach decided
   - ✓ No blocking questions
-- **Draft Persistence**: Maintains interview findings in `.fractal-planner/drafts/`
+- **Draft Persistence**: Maintains interview findings in `.fractal-planner/plans/`
 - **Gap Analysis**: Identifies missing context and suggests clarifying questions
 - **Intent-Specific Strategies**: Adapts questioning approach based on task type
 
@@ -128,7 +128,7 @@ fractal-planner/
 ├── .claude-plugin/
 │   └── plugin.json              # Plugin manifest
 ├── .fractal-planner/
-│   └── drafts/                  # Interview draft files (gitignored)
+│   └── plans/                   # Per-session plan artifacts (gitignored)
 ├── skills/
 │   └── fractal-planner/
 │       ├── SKILL.md              # Skill documentation

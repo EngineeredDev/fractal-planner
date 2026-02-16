@@ -10,7 +10,7 @@ import { existsSync } from 'fs';
 import { join } from 'path';
 import type { InterviewDraft, InterviewFindings, IntentType } from '../types/index.js';
 
-const DRAFTS_DIR = '.fractal-planner/drafts';
+const DRAFTS_DIR = '.fractal-planner/plans';
 
 /**
  * Create a new draft file for an interview session

@@ -13,7 +13,7 @@ import type { Task } from '../types/index.js';
  */
 export async function decomposeTask(
   task: Task,
-  maxComplexity: number = 5,
+  maxComplexity: number = 4,
   depth: number = 0
 ): Promise<Task> {
   // Base case: task is simple enough

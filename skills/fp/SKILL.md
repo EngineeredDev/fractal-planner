@@ -47,7 +47,7 @@ Implement the following goal using the fractal planning process:
    - ✓ Technical approach decided (for non-trivial tasks)
    - ✓ No blocking questions remaining
 
-5. **Document findings** in `.fractal-planner/drafts/interview-${CLAUDE_SESSION_ID}.md`:
+5. **Document findings** in `.fractal-planner/plans/${CLAUDE_SESSION_ID}/interview.md`:
    ```markdown
    # Requirements Interview
 
@@ -92,7 +92,7 @@ Once requirements are clear, analyze the codebase:
    - Test files and examples
    - Configuration and setup files
 
-2. **Document findings** in `.fractal-planner/drafts/research-${CLAUDE_SESSION_ID}.md`:
+2. **Document findings** in `.fractal-planner/plans/${CLAUDE_SESSION_ID}/research.md`:
    - Existing patterns that should be followed
    - Potential challenges or blockers
    - Dependencies that need to be considered
@@ -102,6 +102,35 @@ Once requirements are clear, analyze the codebase:
    - What exists vs. what needs to be built
    - Which patterns to follow vs. which are new
    - Testing approach based on existing tests
+
+4. **Produce codebase context file** in `.fractal-planner/plans/${CLAUDE_SESSION_ID}/context.md`:
+   This captures the codebase understanding you've already gathered in a builder-friendly format. Builder/verifier teammates will use this to skip redundant codebase exploration.
+
+   ```markdown
+   # Codebase Context
+
+   ## Project Overview
+   [1-2 sentence description of what this project is]
+
+   ## Tech Stack
+   - Language: [e.g. TypeScript]
+   - Runtime: [e.g. Bun]
+   - Build: [e.g. bun build + tsc]
+   - Test: [e.g. bun test / vitest]
+   - Package manager: [e.g. bun]
+
+   ## Project Structure
+   [Key directories and their purpose, 5-10 lines max]
+
+   ## Key Files
+   [Entry points, configs, shared types — the files you'd read first]
+
+   ## Patterns & Conventions
+   [Naming, module structure, error handling, export style — what a new contributor needs to know]
+
+   ## Build & Test Commands
+   [Exact commands to build, test, lint]
+   ```
 
 ### Phase 2: Fractal Decomposition 🌳
 
@@ -118,7 +147,7 @@ Break down the task into progressively smaller subtasks:
    - Subtasks should have clear dependencies
    - Continue until all leaf tasks are ≤ 5 complexity
 
-4. **Document the task tree** in `.fractal-planner/drafts/tasks-${CLAUDE_SESSION_ID}.md`:
+4. **Document the task tree** in `.fractal-planner/plans/${CLAUDE_SESSION_ID}/tasks.md`:
    ```markdown
    # Task Decomposition
 
@@ -146,7 +175,7 @@ Create a detailed execution plan:
    - What tests are needed?
    - What documentation is required?
 
-3. **Create the plan** in `.fractal-planner/drafts/plan-${CLAUDE_SESSION_ID}.md`:
+3. **Create the plan** in `.fractal-planner/plans/${CLAUDE_SESSION_ID}/plan.md`:
    ```markdown
    # Implementation Plan
 
@@ -208,7 +237,7 @@ Parse these from `$ARGUMENTS` if present.
 
 - **ALWAYS start with the interview phase** - never skip it!
 - **Use AskUserQuestion** for the interview - don't just proceed with assumptions
-- **Document everything** in `.fractal-planner/drafts/` for traceability
+- **Document everything** in `.fractal-planner/plans/` for traceability
 - **Follow existing patterns** discovered during research
 - **Verify each step** before moving to the next phase
 
