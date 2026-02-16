@@ -211,3 +211,68 @@ FILES_MODIFIED:
 - /absolute/path/to/file2.test.ts
 - /absolute/path/to/component.tsx
 ```
+
+## Linear Integration
+
+### Overview
+
+When `linear.enabled` is `true` in `.fractal-planner/config.json`, the planning phase creates Linear issues mirroring the task tree, and the implementation phase updates issue statuses as work progresses.
+
+### Mapping File Format
+
+`.fractal-planner/plans/{planId}/linear-mapping.json`:
+
+```json
+{
+  "planId": "session-id",
+  "teamId": "team-uuid",
+  "projectId": "project-uuid-or-null",
+  "resolvedStatuses": {
+    "pending": "status-uuid-1",
+    "in-progress": "status-uuid-2",
+    "completed": "status-uuid-3",
+    "failed": "status-uuid-4"
+  },
+  "tasks": {
+    "root": { "linearIssueId": "issue-uuid", "linearIdentifier": "TEAM-42" },
+    "1":    { "linearIssueId": "issue-uuid", "linearIdentifier": "TEAM-43" },
+    "1.1":  { "linearIssueId": "issue-uuid", "linearIdentifier": "TEAM-44" }
+  }
+}
+```
+
+This file is created during `fp:plan` Phase 2.5 and consumed during `fp:implement`. It is gitignored (under `.fractal-planner/`).
+
+### Status Update Points
+
+During implementation, the **team-lead** (not builder or verifier) updates Linear issues at these points:
+
+| Event | Linear Status Update | Linear Comment |
+|-------|---------------------|----------------|
+| Task assigned to builder | `in-progress` | No |
+| Verification passed | `completed` | Yes — brief pass summary |
+| Task failed (max iterations) | `failed` | Yes — failure report |
+| Task skipped (blocked dep) | (no change) | Yes — "Blocked by {dep}" |
+
+After all leaf tasks are processed, parent issue statuses are rolled up bottom-to-top:
+- All children completed → parent marked `completed`
+- Any child in-progress → parent marked `in-progress`
+- All children failed → parent marked `failed`
+
+### Status Resolution Strategy
+
+Statuses are resolved once during planning (Phase 2.5) and stored in the mapping file.
+
+**When `statusMap` is configured**: Each name (e.g. `"Todo"`, `"In Progress"`) is matched against the team's available statuses by name. If a name doesn't match, it falls back to auto-detect for that status with a warning.
+
+**When `statusMap` is NOT configured** (default): Auto-detect by Linear status **type**:
+- `pending` → first status of type `backlog` (or `unstarted` if no backlog type exists)
+- `in-progress` → first status of type `started`
+- `completed` → first status of type `completed`
+- `failed` → first status of type `canceled`
+
+### Graceful Degradation
+
+- If `linear.enabled` is `false` (default), zero Linear calls are made
+- If Linear MCP server is unavailable, planning logs a warning and skips Linear sync — the plan still completes normally
+- If `linearMapping` is `null` during implementation (no mapping file), all Linear updates are silently skipped

@@ -16,7 +16,19 @@ const PermissionModeSchema = z.enum([
   'default', 'acceptEdits', 'bypassPermissions', 'plan', 'delegate', 'dontAsk'
 ]);
 
-export const FractalPlannerConfigSchema = z.object({
+const LinearConfigSchema = z.object({
+  enabled:   z.boolean().default(false),
+  teamId:    z.string().optional(),
+  projectId: z.string().optional(),
+  statusMap: z.object({
+    pending:         z.string(),
+    'in-progress':   z.string(),
+    completed:       z.string(),
+    failed:          z.string(),
+  }).optional(),
+});
+
+const FractalPlannerConfigBaseSchema = z.object({
   maxComplexity:    z.number().int().min(1).max(10).default(5),
   maxIterations:    z.number().int().min(1).default(3),
   researchOnly:     z.boolean().default(false),
@@ -25,12 +37,18 @@ export const FractalPlannerConfigSchema = z.object({
   noCommit:         z.boolean().default(false),
   plansDir:         z.string().default('.fractal-planner/plans'),
   permissionMode:   PermissionModeSchema.default('default'),
+  linear:           LinearConfigSchema.default({ enabled: false }),
 });
 
-export type FractalPlannerConfig = z.infer<typeof FractalPlannerConfigSchema>;
-export type FractalPlannerConfigFile = z.input<typeof FractalPlannerConfigSchema>;
+export const FractalPlannerConfigSchema = FractalPlannerConfigBaseSchema.refine(
+  (cfg) => !cfg.linear.enabled || cfg.linear.teamId,
+  { message: 'linear.teamId is required when linear.enabled is true', path: ['linear', 'teamId'] },
+);
 
-const FractalPlannerConfigFileSchema = FractalPlannerConfigSchema.partial();
+export type FractalPlannerConfig = z.infer<typeof FractalPlannerConfigSchema>;
+export type FractalPlannerConfigFile = z.input<typeof FractalPlannerConfigBaseSchema>;
+
+const FractalPlannerConfigFileSchema = FractalPlannerConfigBaseSchema.partial();
 
 export const DEFAULT_CONFIG: FractalPlannerConfig = FractalPlannerConfigSchema.parse({});
 

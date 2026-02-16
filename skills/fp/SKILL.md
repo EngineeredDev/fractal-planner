@@ -3,7 +3,7 @@ name: fp:plan
 description: Iterative planning and execution framework with requirements interview, research, decomposition, and builder/verifier teams. Use for complex feature implementation that needs careful planning.
 context: fork
 agent: Plan
-allowed-tools: AskUserQuestion, Read, Write, Edit, Glob, Grep, Task
+allowed-tools: AskUserQuestion, Read, Write, Edit, Glob, Grep, Task, mcp__linear-server__create_issue, mcp__linear-server__list_issue_statuses, mcp__linear-server__list_teams
 ---
 
 # Fractal Planner
@@ -160,6 +160,54 @@ Break down the task into progressively smaller subtasks:
      - [ID: 1.1.2] [Description] (Complexity: X)
    - [ID: 1.2] [Description] (Complexity: X)
    ```
+
+### Phase 2.5: Linear Sync (if enabled)
+
+**Check config**: Read `.fractal-planner/config.json` and check for `linear.enabled`. If `false` or missing, **skip this entire phase**.
+
+If Linear is enabled:
+
+1. **Verify Linear MCP is available**: Call `mcp__linear-server__list_teams` as a health check. If it fails (tool not found or connection error), log a warning — "Linear MCP server not available, skipping Linear sync" — and skip this phase. Do NOT fail the planning run.
+
+2. **Resolve status IDs**:
+   - Call `mcp__linear-server__list_issue_statuses` for the configured `linear.teamId`
+   - **If `statusMap` is configured**: For each status name in the map, find the matching status by name in the team's statuses. If a name doesn't match, fall back to auto-detect for that status and log a warning.
+   - **If `statusMap` is NOT configured** (default): Auto-detect by status **type**:
+     - `pending` → first status of type `backlog` (or `unstarted` if no backlog)
+     - `in-progress` → first status of type `started`
+     - `completed` → first status of type `completed`
+     - `failed` → first status of type `canceled`
+   - Store the resolved status UUIDs for each fractal-planner status.
+
+3. **Create Linear issues**: Walk the task tree **top-down** (BFS or pre-order DFS) so parent issue IDs are available when creating children. For each task, call `mcp__linear-server__create_issue`:
+   - `title`: `[FP-{task.id}] {task.description}`
+   - `team`: config `linear.teamId`
+   - `project`: config `linear.projectId` (if set)
+   - `parentId`: Linear issue ID of the parent task (omit for root)
+   - `state`: resolved "pending" status ID
+   - `description`: For **leaf tasks**, include acceptance criteria as a markdown checklist, dependencies, and files to modify. For **non-leaf tasks**, include a summary noting it's a parent container.
+
+4. **Write mapping file**: Save `.fractal-planner/plans/${CLAUDE_SESSION_ID}/linear-mapping.json`:
+   ```json
+   {
+     "planId": "${CLAUDE_SESSION_ID}",
+     "teamId": "...",
+     "projectId": "...",
+     "resolvedStatuses": {
+       "pending": "status-uuid-1",
+       "in-progress": "status-uuid-2",
+       "completed": "status-uuid-3",
+       "failed": "status-uuid-4"
+     },
+     "tasks": {
+       "root": { "linearIssueId": "...", "linearIdentifier": "TEAM-42" },
+       "1":    { "linearIssueId": "...", "linearIdentifier": "TEAM-43" },
+       "1.1":  { "linearIssueId": "...", "linearIdentifier": "TEAM-44" }
+     }
+   }
+   ```
+
+5. **Log summary**: "Created {N} Linear issues under team {teamId}" with a list of issue identifiers.
 
 ### Phase 3: Implementation Planning 📋
 

@@ -104,6 +104,79 @@ All fields are optional. Only include the values you want to override:
 
 Invalid values are caught at startup with a clear error message — for example, setting `permissionMode` to an unrecognized value will tell you exactly which file and field is wrong.
 
+### Linear Integration (Optional)
+
+Fractal Planner can sync tasks to [Linear](https://linear.app) so your planning breakdown appears as real Linear issues and status updates flow back as builders complete work.
+
+#### Prerequisites
+
+1. Install the [Linear MCP server](https://github.com/linear/linear-mcp) in your Claude Code settings (`~/.claude/settings.json`):
+   ```json
+   {
+     "mcpServers": {
+       "linear": {
+         "command": "npx",
+         "args": ["-y", "@anthropic-ai/linear-mcp-server"]
+       }
+     }
+   }
+   ```
+
+2. Authenticate with Linear when prompted (the MCP server handles OAuth).
+
+#### Finding Your Team ID and Project ID
+
+**Team ID**:
+1. Open [Linear](https://linear.app) and navigate to your team's issues page
+2. Press **Cmd+K** (or Ctrl+K) to open the command palette
+3. Search for **Copy model UUID...** and select it
+4. Copy the UUID — this is your `teamId`
+
+**Project ID** (optional — only needed if you want issues grouped under a specific project):
+1. In Linear, navigate to the project you want to use
+2. Press **Cmd+K** (or Ctrl+K) to open the command palette
+3. Search for **Copy model UUID...** and select it
+4. Copy the UUID — this is your `projectId`
+
+#### Configuration
+
+Add a `linear` block to your project config (`.fractal-planner/config.json`):
+
+```json
+{
+  "linear": {
+    "enabled": true,
+    "teamId": "your-team-uuid",
+    "projectId": "your-project-uuid"
+  }
+}
+```
+
+Status mapping is auto-detected from your team's workflow states by default. To override, add a `statusMap`:
+
+```json
+{
+  "linear": {
+    "enabled": true,
+    "teamId": "your-team-uuid",
+    "statusMap": {
+      "pending": "Todo",
+      "in-progress": "In Progress",
+      "completed": "Done",
+      "failed": "Canceled"
+    }
+  }
+}
+```
+
+The status names must match your team's workflow states exactly (case-sensitive). If a name doesn't match, Fractal Planner falls back to auto-detection for that status.
+
+#### What Happens
+
+- **During planning** (`/fp:plan`): Issues are created in Linear mirroring the task tree hierarchy. A `linear-mapping.json` file is saved alongside plan artifacts.
+- **During implementation** (`/fp:implement`): Issues move to "In Progress" when a builder starts, "Done" on verification pass, or "Canceled" on failure. Comments are posted with verification results. Parent issues roll up based on children's statuses.
+- **Graceful degradation**: If the Linear MCP server isn't connected, planning and implementation proceed normally — Linear sync is simply skipped with a warning.
+
 ## Requirements
 
 - Claude Code >= 2.1.32

@@ -32,6 +32,12 @@ Read both plan files from `.fractal-planner/plans/{planId}/`:
 If either file does not exist, report the error and stop:
 > "Plan '{planId}' not found. Run `/fp:plan` first to create a plan, then use the session ID."
 
+## Step 1.5: Load Linear Mapping
+
+Check if `.fractal-planner/plans/{planId}/linear-mapping.json` exists:
+- **If yes**: Parse it and hold as `linearMapping` for the session. This contains Linear issue IDs and resolved status UUIDs for all tasks.
+- **If no**: Set `linearMapping` to `null`. All Linear update steps below will be skipped when `linearMapping` is null.
+
 ## Step 2: Load Codebase Context
 
 Load codebase context so builder/verifier teammates don't waste turns exploring the project from scratch. Use a three-tier fallback:
@@ -156,7 +162,11 @@ For each task in the execution order:
 
 1. **Spawn fresh builder and verifier teammates** for this task (see Step 4 for instructions). This ensures each task starts with a clean context — no stale state from previous tasks.
 
-2. **Message the builder** with the single task (include codebase context if available):
+2. **Update Linear status to in-progress** (if `linearMapping` is not null):
+   - Look up the task's Linear issue ID from `linearMapping.tasks[{id}].linearIssueId`
+   - Call `mcp__linear-server__update_issue` with `id` = issue ID, `state` = `linearMapping.resolvedStatuses['in-progress']`
+
+3. **Message the builder** with the single task (include codebase context if available):
    ```
    {codebaseContext}
 
@@ -169,24 +179,33 @@ For each task in the execution order:
    ```
    Note: `{codebaseContext}` is the content loaded in Step 2. If empty, omit it from the message.
 
-3. **Monitor the builder/verifier feedback loop**:
+4. **Monitor the builder/verifier feedback loop**:
    - Builder implements, messages verifier
    - Verifier checks, messages builder (fail) or team-lead (pass)
    - Track the iteration count for this task
 
-4. **On verification pass** (verifier messages team-lead):
+5. **On verification pass** (verifier messages team-lead):
    - Log: "Task {id} PASSED (iteration {n}/{max})"
    - Record the result
+   - **Update Linear status to completed** (if `linearMapping` is not null):
+     - Call `mcp__linear-server__update_issue` with `id` = `linearMapping.tasks[{id}].linearIssueId`, `state` = `linearMapping.resolvedStatuses['completed']`
+     - Call `mcp__linear-server__create_comment` with `issueId` = the Linear issue ID, `body` = brief verification pass summary (e.g. "Verification passed: {N}/{N} criteria met.")
 
-5. **On max iterations reached** (verifier reports failure after {max} attempts):
+6. **On max iterations reached** (verifier reports failure after {max} attempts):
    - Log: "Task {id} FAILED after {max} iterations"
+   - **Update Linear status to failed** (if `linearMapping` is not null):
+     - Call `mcp__linear-server__update_issue` with `id` = `linearMapping.tasks[{id}].linearIssueId`, `state` = `linearMapping.resolvedStatuses['failed']`
+     - Call `mcp__linear-server__create_comment` with `issueId` = the Linear issue ID, `body` = failure report from verifier
    - Use `AskUserQuestion` to ask the user:
      - Question: "Task {id} failed verification after {max} iterations. What would you like to do?"
      - Options:
        - **Continue**: Skip this task and proceed to the next unblocked task
        - **Stop**: End the implementation run and report current progress
 
-6. **Shut down builder and verifier** before moving to the next task. Send each a shutdown request, wait for confirmation, then proceed to the next task.
+7. **On task skipped (blocked dependency)** (if `linearMapping` is not null):
+   - Call `mcp__linear-server__create_comment` with `issueId` = `linearMapping.tasks[{id}].linearIssueId`, `body` = "Blocked by dependency: {dep task id}" (do NOT change the issue status)
+
+8. **Shut down builder and verifier** before moving to the next task. Send each a shutdown request, wait for confirmation, then proceed to the next task.
 
 ## Step 5.5: Create Git Commit (after verification passes)
 
@@ -283,8 +302,15 @@ Wait for confirmation.
 
 After all tasks are processed (or the user chose to stop):
 
-1. **Clean up the team**: Delete team `fp-impl-{planId}` (builder and verifier were already shut down after the last task in Step 5)
-2. **Report structured summary**:
+1. **Roll up parent statuses in Linear** (if `linearMapping` is not null):
+   Traverse non-leaf tasks **bottom-up** (deepest parents first, then up to root):
+   - If **all children completed** → call `mcp__linear-server__update_issue` to mark parent `completed`
+   - If **any child is in-progress** (and none failed) → mark parent `in-progress`
+   - If **all children failed** → mark parent `failed`
+   - Otherwise, leave the parent status unchanged
+
+2. **Clean up the team**: Delete team `fp-impl-{planId}` (builder and verifier were already shut down after the last task in Step 5)
+3. **Report structured summary**:
 
 ```
 ## Implementation Summary ({planId})
