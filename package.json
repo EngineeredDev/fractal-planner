@@ -1,0 +1,47 @@
+{
+  "name": "fractal-planner",
+  "version": "0.1.0",
+  "description": "Iterative planning and execution framework for Claude Code with fractal task decomposition and builder/verifier agent teams",
+  "license": "MIT",
+  "author": "Your Name <your.email@example.com>",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "skills",
+    ".claude-plugin"
+  ],
+  "keywords": [
+    "claude",
+    "claude-code",
+    "plugin",
+    "agent-teams",
+    "planning",
+    "fractal",
+    "task-decomposition"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/fractal-planner.git"
+  },
+  "scripts": {
+    "build": "bun build ./src/index.ts --outdir dist --target node --format esm && bun build ./skills/fractal-planner/skill.ts --outdir skills/fractal-planner --target node --format esm && tsc --emitDeclarationOnly",
+    "dev": "tsc --watch",
+    "clean": "rm -rf dist && find src skills -type f \\( -name '*.js' -o -name '*.d.ts' -o -name '*.js.map' -o -name '*.d.ts.map' \\) -delete",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "bun run clean && bun run build",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.2.39"
+  },
+  "devDependencies": {
+    "@types/node": "^25.2.3",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

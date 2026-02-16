@@ -1,0 +1,19 @@
+{
+  "name": "fractal-planner",
+  "version": "0.1.0",
+  "description": "Iterative planning and execution framework that decomposes features into fractal tasks with builder/verifier agent teams",
+  "author": {
+    "name": "Author Name",
+    "email": "author@example.com",
+    "url": "https://github.com/author"
+  },
+  "license": "MIT",
+  "repository": "https://github.com/yourusername/fractal-planner",
+  "keywords": [
+    "planning",
+    "agent-teams",
+    "fractal",
+    "task-decomposition",
+    "builder-verifier"
+  ]
+}
