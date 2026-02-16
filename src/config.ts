@@ -16,7 +16,7 @@ const PermissionModeSchema = z.enum([
   'default', 'acceptEdits', 'bypassPermissions', 'plan', 'delegate', 'dontAsk'
 ]);
 
-const LinearConfigSchema = z.object({
+export const LinearConfigSchema = z.object({
   enabled:   z.boolean().default(false),
   teamId:    z.string().optional(),
   projectId: z.string().optional(),
