@@ -92,7 +92,7 @@ Be specific with file paths and line numbers in your findings.
               try {
                 const parsed = JSON.parse(jsonMatch[0]);
                 Object.assign(findings, parsed);
-              } catch (e) {
+              } catch  {
                 // Continue if JSON parsing fails
               }
             }

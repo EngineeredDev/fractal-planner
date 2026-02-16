@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { loadConfig, getConfig, resetConfig, FractalPlannerConfigSchema } from '../config';
+import { loadConfig, getConfig, resetConfig } from '../config';
 import './setup';
 
 describe('Config loading system', () => {

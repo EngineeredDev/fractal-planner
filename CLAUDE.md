@@ -13,6 +13,8 @@ bun install            # Install dependencies (bun only — no npm/yarn)
 bun run build          # Bundle (bun build) + type declarations (tsc --emitDeclarationOnly)
 bun run dev            # TypeScript watch mode (type checking only)
 bun run typecheck      # Type check without emitting
+bun run lint           # Run oxlint
+bun run lint:fix       # Run oxlint with auto-fix and suggestions
 bun test               # Run all tests
 bun test --watch       # Watch mode
 bun test --coverage    # With coverage
@@ -52,6 +54,7 @@ Builder/verifier agents communicate via structured text messages:
 
 - **ES module imports use `.js` extensions**: `import { foo } from './bar.js'`
 - **`strict: true`** in tsconfig — no implicit any
+- **Linting with oxlint** — configured via `.oxlintrc.json` with plugins: `eslint`, `typescript`, `unicorn`, `oxc`, `promise`, `import`. Run `bun run lint` before committing; CI is expected to enforce lint-clean code.
 - **Zod v4** for all config validation schemas
 - **Dependencies**: `@anthropic-ai/claude-agent-sdk` and `zod`
 - **`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`** must be set to enable agent team spawning (configured in `.claude/settings.local.json`)
