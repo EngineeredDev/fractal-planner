@@ -13,6 +13,7 @@ export interface QuestionStrategy {
   researchFirst: boolean;
   focusAreas: string[];
   initialQuestions: string[];
+  researchPrompts: string[];
 }
 
 /**
@@ -27,7 +28,8 @@ export function getQuestionStrategy(intent: IntentType): QuestionStrategy {
         initialQuestions: [
           'Is this change purely cosmetic/trivial with no behavioral impact?',
           'Are there any files or areas that should NOT be touched?'
-        ]
+        ],
+        researchPrompts: []
       };
 
     case 'refactoring':
@@ -38,6 +40,11 @@ export function getQuestionStrategy(intent: IntentType): QuestionStrategy {
           'What specific behavior must be preserved exactly as-is?',
           'Are there tests covering this code? If not, should we add them first?',
           'What is the rollback plan if issues are discovered?'
+        ],
+        researchPrompts: [
+          'Search for files matching the refactoring target',
+          'Check test coverage for affected modules',
+          'Look for related configuration files'
         ]
       };
 
@@ -49,6 +56,11 @@ export function getQuestionStrategy(intent: IntentType): QuestionStrategy {
           'Should this follow existing patterns in the codebase?',
           'Are there similar features I can learn from?',
           'What libraries/frameworks should be used (or avoided)?'
+        ],
+        researchPrompts: [
+          'Find similar features in the codebase',
+          'Check project structure and module patterns',
+          'Identify integration points and entry files'
         ]
       };
 
@@ -60,6 +72,10 @@ export function getQuestionStrategy(intent: IntentType): QuestionStrategy {
           'What are the MUST-HAVE vs NICE-TO-HAVE features?',
           'What should be explicitly EXCLUDED from this work?',
           'When is this considered "done"?'
+        ],
+        researchPrompts: [
+          'Find files related to the feature area',
+          'Check existing test patterns in the project'
         ]
       };
 
@@ -71,6 +87,11 @@ export function getQuestionStrategy(intent: IntentType): QuestionStrategy {
           'What problem is this architectural change solving?',
           'What are the trade-offs vs alternative approaches?',
           'What is the migration path for existing code?'
+        ],
+        researchPrompts: [
+          'Map current architecture — entry points, layers, module boundaries',
+          'Find affected integration points and cross-cutting concerns',
+          'Check for existing migration patterns or version compatibility'
         ]
       };
   }

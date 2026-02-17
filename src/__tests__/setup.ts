@@ -19,6 +19,11 @@ export function makeTask(overrides?: Partial<Task>): Task {
     estimatedComplexity: 3,
     dependencies: [],
     status: 'pending',
+    metadata: {
+      filesToModify: ['src/example.ts'],
+      testsRequired: true,
+      hints: ['Implement the task'],
+    },
     ...overrides,
   };
 }
@@ -34,6 +39,11 @@ export function makeDraft(overrides?: Partial<InterviewFindings>): InterviewDraf
     constraints: ['constraint 1'],
     assumptions: ['assumption 1'],
     openQuestions: [],
+    codebaseContext: {
+      relevantFiles: ['src/index.ts'],
+      existingPatterns: ['module pattern'],
+      testStrategy: 'unit tests with bun:test',
+    },
     ...overrides,
   };
   return {

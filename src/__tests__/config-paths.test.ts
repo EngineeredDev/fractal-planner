@@ -57,7 +57,7 @@ describe('FractalPlannerConfigSchema edge cases', () => {
 
   test('empty object passes (all fields optional with defaults)', () => {
     const config = FractalPlannerConfigSchema.parse({});
-    expect(config.maxComplexity).toBe(5);
+    expect(config.maxComplexity).toBe(3);
     expect(config.maxIterations).toBe(3);
   });
 

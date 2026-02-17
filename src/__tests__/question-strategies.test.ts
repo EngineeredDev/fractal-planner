@@ -158,4 +158,22 @@ describe('getQuestionStrategy', () => {
   test('architecture has "trade-offs" in focusAreas', () => {
     expect(getQuestionStrategy('architecture').focusAreas).toContain('trade-offs');
   });
+
+  test('trivial has empty researchPrompts', () => {
+    expect(getQuestionStrategy('trivial').researchPrompts).toEqual([]);
+  });
+
+  test.each(['refactoring', 'build-from-scratch', 'mid-sized', 'architecture'] as const)(
+    '%s has non-empty researchPrompts',
+    (intent) => {
+      expect(getQuestionStrategy(intent).researchPrompts.length).toBeGreaterThan(0);
+    }
+  );
+
+  test('each intent returns researchPrompts as an array', () => {
+    const intents = ['trivial', 'refactoring', 'build-from-scratch', 'mid-sized', 'architecture'] as const;
+    for (const intent of intents) {
+      expect(Array.isArray(getQuestionStrategy(intent).researchPrompts)).toBe(true);
+    }
+  });
 });

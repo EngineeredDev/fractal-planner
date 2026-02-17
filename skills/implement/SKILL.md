@@ -98,6 +98,9 @@ RULES:
 - Implement with REAL code only. No stubs, placeholders, TODOs, or "coming soon" comments.
 - If the task metadata says testsRequired: true, write tests.
 - Follow existing codebase patterns and conventions (see Codebase Context above if provided).
+- If the task has "Implementation Hints", follow them as your implementation guide — they describe HOW to implement, not just WHAT.
+- If the task has "References", read those files/lines BEFORE coding to understand the patterns you should follow.
+- If the task has "MUST NOT DO" constraints, treat them as hard constraints — violating them will fail verification.
 - Track which files you modify (every Write/Edit/creation operation).
 - When implementation is complete, message the "verifier" teammate:
   "Task {id} implementation complete. Ready for verification.
@@ -130,7 +133,9 @@ RULES:
   1. Code exists and is syntactically valid (no stubs, no placeholders, no TODOs)
   2. Each acceptance criterion listed in the task passes
   3. If testsRequired: true, tests exist and pass (run them with Bash)
-  4. Code follows existing patterns in the codebase (see Codebase Context above if provided)
+  4. If the task has "Test Commands", run those exact commands
+  5. Code follows existing patterns in the codebase (see Codebase Context above if provided)
+  6. If the task has "MUST NOT DO" guardrails, verify the implementation does NOT violate any of them
 - Do NOT use Write or Edit tools — you are read-only plus test runner.
 
 On ALL PASS, message the "team-lead":
@@ -172,12 +177,24 @@ For each task in the execution order:
 
    Implement task {id}:
    Description: {description}
+
    Acceptance Criteria:
    {numbered list of criteria}
+
+   Implementation Hints:
+   {numbered hints from task metadata, or omit section if empty}
+
+   References:
+   {file:line refs from task metadata, or omit section if empty}
+
    Files to Modify: {list or "determine from context"}
    Tests Required: {yes/no}
+   Test Commands: {explicit commands from task metadata, or omit line if empty}
+
+   MUST NOT DO:
+   {bulleted guardrails from task metadata, or omit section if empty}
    ```
-   Note: `{codebaseContext}` is the content loaded in Step 2. If empty, omit it from the message.
+   Note: `{codebaseContext}` is the content loaded in Step 2. If empty, omit it from the message. Omit any section (Implementation Hints, References, MUST NOT DO, Test Commands) if the task has no data for that field.
 
 4. **Monitor the builder/verifier feedback loop**:
    - Builder implements, messages verifier

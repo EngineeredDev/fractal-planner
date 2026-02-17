@@ -18,7 +18,8 @@ export async function evaluateClearance(draft: InterviewDraft): Promise<Clearanc
     scopeBoundariesEstablished: evaluateScopeBoundaries(findings),
     noAmbiguities: evaluateAmbiguities(findings),
     technicalApproachDecided: evaluateTechnicalApproach(findings),
-    noBlockingQuestions: findings.openQuestions.length === 0
+    noBlockingQuestions: findings.openQuestions.length === 0,
+    testStrategyIdentified: evaluateTestStrategy(findings)
   };
 
   const gaps: ClearanceGap[] = [];
@@ -71,16 +72,24 @@ export async function evaluateClearance(draft: InterviewDraft): Promise<Clearanc
     });
   }
 
+  if (!checklist.testStrategyIdentified) {
+    gaps.push({
+      type: 'minor',
+      item: 'testStrategyIdentified',
+      description: 'Test strategy not identified',
+      suggestedQuestion: 'How should this change be tested? (unit tests, integration tests, manual verification, etc.)'
+    });
+  }
+
   const passed = Object.values(checklist).every(v => v === true);
 
   return { passed, checklist, gaps };
 }
 
 function evaluateCoreObjective(findings: InterviewDraft['findings']): boolean {
-  // Core objective is defined if we have confirmed requirements
-  // OR if the user goal is sufficiently detailed
-  return findings.confirmedRequirements.length > 0 ||
-         findings.userGoal.length > 10;
+  // Core objective requires at least one user-confirmed requirement.
+  // Goal text alone is not sufficient — the user must have validated something.
+  return findings.confirmedRequirements.length > 0;
 }
 
 function evaluateScopeBoundaries(findings: InterviewDraft['findings']): boolean {
@@ -99,4 +108,13 @@ function evaluateTechnicalApproach(findings: InterviewDraft['findings']): boolea
   // For trivial, we can skip this
   if (findings.intent === 'trivial') return true;
   return Object.keys(findings.technicalDecisions).length > 0;
+}
+
+function evaluateTestStrategy(findings: InterviewDraft['findings']): boolean {
+  if (findings.intent === 'trivial') return true;
+  if (findings.codebaseContext?.testStrategy) return true;
+  const hasTestKey = Object.keys(findings.technicalDecisions).some(
+    key => /test/i.test(key)
+  );
+  return hasTestKey;
 }

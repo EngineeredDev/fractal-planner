@@ -13,7 +13,10 @@ export interface Task {
   metadata?: {
     filesToModify?: string[];
     testsRequired?: boolean;
-    estimatedTime?: string;
+    hints?: string[];
+    references?: string[];
+    guardrails?: string[];
+    testCommands?: string[];
   };
 }
 
@@ -70,6 +73,7 @@ export interface QuestionStrategy {
   researchFirst: boolean;
   focusAreas: string[];
   initialQuestions: string[];
+  researchPrompts: string[];
 }
 
 // Clearance check result
@@ -81,6 +85,7 @@ export interface ClearanceCheck {
     noAmbiguities: boolean;             // No critical unknowns?
     technicalApproachDecided: boolean;  // Implementation strategy chosen?
     noBlockingQuestions: boolean;       // All blockers resolved?
+    testStrategyIdentified: boolean;   // Test approach identified?
   };
   gaps: ClearanceGap[];
 }
@@ -103,6 +108,11 @@ export interface InterviewFindings {
   constraints: string[];
   assumptions: string[];
   openQuestions: string[];
+  codebaseContext?: {
+    relevantFiles: string[];
+    existingPatterns: string[];
+    testStrategy?: string;
+  };
 }
 
 // Draft file structure

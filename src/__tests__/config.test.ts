@@ -145,7 +145,7 @@ describe('Config loading system', () => {
     test('applies default values when no overrides provided', async () => {
       const config = await loadConfig();
 
-      expect(config.maxComplexity).toBe(5); // default
+      expect(config.maxComplexity).toBe(3); // default
       expect(config.maxIterations).toBe(3); // default
       expect(config.researchOnly).toBe(false); // default
       expect(config.planOnly).toBe(false); // default
@@ -166,6 +166,27 @@ describe('Config loading system', () => {
       expect(config.researchOnly).toBe(true); // overridden
       expect(config.maxIterations).toBe(3); // default
       expect(config.enableAgentTeams).toBe(true); // default
+    });
+  });
+
+  describe('cliRunner config', () => {
+    test('defaults to auto', async () => {
+      const config = await loadConfig();
+      expect(config.cliRunner).toBe('auto');
+    });
+
+    test('accepts bun', async () => {
+      const config = await loadConfig({ cliRunner: 'bun' });
+      expect(config.cliRunner).toBe('bun');
+    });
+
+    test('accepts node', async () => {
+      const config = await loadConfig({ cliRunner: 'node' });
+      expect(config.cliRunner).toBe('node');
+    });
+
+    test('rejects invalid values', async () => {
+      await expect(loadConfig({ cliRunner: 'deno' as any })).rejects.toThrow();
     });
   });
 

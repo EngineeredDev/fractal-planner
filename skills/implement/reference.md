@@ -16,7 +16,6 @@ interface Task {
   metadata?: {
     filesToModify?: string[];    // files the builder should focus on
     testsRequired?: boolean;     // whether tests must be written
-    estimatedTime?: string;      // rough estimate
   };
 }
 ```

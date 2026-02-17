@@ -36,7 +36,7 @@ export const CommentCheckerConfigSchema = z.object({
 });
 
 const FractalPlannerConfigBaseSchema = z.object({
-  maxComplexity:    z.number().int().min(1).max(10).default(5),
+  maxComplexity:    z.number().int().min(1).max(10).default(3),
   maxIterations:    z.number().int().min(1).default(3),
   researchOnly:     z.boolean().default(false),
   planOnly:         z.boolean().default(false),
@@ -46,6 +46,7 @@ const FractalPlannerConfigBaseSchema = z.object({
   permissionMode:   PermissionModeSchema.default('default'),
   linear:           LinearConfigSchema.default({ enabled: false }),
   commentChecker:   CommentCheckerConfigSchema.default({ enabled: true }),
+  cliRunner:        z.enum(['bun', 'node', 'auto']).default('auto'),
 });
 
 export const FractalPlannerConfigSchema = FractalPlannerConfigBaseSchema.refine(

@@ -1,113 +1,129 @@
+import type { Task } from '../types/index.js';
+
+export type ViolationType =
+  | 'over-complexity'
+  | 'missing-acceptance'
+  | 'missing-files'
+  | 'missing-tests-required'
+  | 'missing-hints'
+  | 'subtask-count';
+
+export interface TaskViolation {
+  type: ViolationType;
+  id: string;
+  description: string;
+  parentId: string | null;
+  depth: number;
+  detail: string;
+}
+
+export interface ValidationResult {
+  valid: boolean;
+  maxComplexity: number;
+  totalLeafTasks: number;
+  violations: TaskViolation[];
+  stats: { maxDepth: number; leafComplexityDistribution: Record<number, number> };
+}
+
 /**
- * Fractal Decomposition Phase
- *
- * Recursively breaks down tasks into smaller subtasks until
- * each task is below the complexity threshold.
+ * Validate that the task tree conforms to all decomposer rules:
+ * - Leaf complexity <= maxComplexity
+ * - Leaves have acceptance criteria
+ * - Leaves have filesToModify metadata
+ * - Leaves have testsRequired metadata
+ * - Non-leaf, non-root nodes have 2-5 subtasks
  */
+export function validateTaskTree(root: Task, maxComplexity: number): ValidationResult {
+  const violations: TaskViolation[] = [];
+  const distribution: Record<number, number> = {};
 
-import { query } from '@anthropic-ai/claude-agent-sdk';
-import type { Task, FractalPlannerConfig } from '../types/index.js';
-import { getConfig } from '../config.js';
-
-/**
- * Recursively decompose a task into subtasks
- */
-export async function decomposeTask(
-  task: Task,
-  config?: Partial<FractalPlannerConfig>,
-  depth: number = 0
-): Promise<Task> {
-  const cfg = { ...getConfig(), ...config };
-  const maxComplexity = cfg.maxComplexity;
-  // Base case: task is simple enough
-  if (task.estimatedComplexity <= maxComplexity) {
-    console.log(`  ${'  '.repeat(depth)}✓ Task ${task.id} is manageable (complexity: ${task.estimatedComplexity})`);
-    return task;
-  }
-
-  console.log(`  ${'  '.repeat(depth)}🌳 Decomposing task ${task.id} (complexity: ${task.estimatedComplexity})...`);
-
-  const decompositionPrompt = `
-Analyze this task and break it down into smaller, independent subtasks:
-
-**Task**: ${task.description}
-
-**Current Complexity**: ${task.estimatedComplexity}/10
-
-**Target Complexity**: Each subtask should be ${maxComplexity}/10 or less
-
-For each subtask, provide:
-1. **Description**: Clear, actionable description
-2. **Acceptance Criteria**: Specific, measurable criteria (3-5 items)
-3. **Complexity Estimate**: 1-10 scale
-4. **Dependencies**: IDs of other subtasks this depends on
-5. **Files to Modify**: Estimated files that will be changed
-
-Output valid JSON array of subtasks:
-[
-  {
-    "description": "...",
-    "acceptanceCriteria": ["criterion1", "criterion2"],
-    "estimatedComplexity": 4,
-    "dependencies": [],
-    "metadata": {
-      "filesToModify": ["path/to/file.ts"],
-      "testsRequired": true
-    }
-  }
-]
-
-IMPORTANT: Break the task into logical, independent pieces. Each subtask should be
-achievable by a single agent without getting lost or running out of context.
-`;
-
-  const subtasks: Task[] = [];
-
-  try {
-    for await (const message of query({
-      prompt: decompositionPrompt,
-      options: {
-        allowedTools: ['Read', 'Grep'],
-        permissionMode: cfg.permissionMode
+  function walk(task: Task, parentId: string | null, depth: number, isRoot: boolean): void {
+    const isLeaf = !task.subtasks || task.subtasks.length === 0;
+    if (isLeaf) {
+      const c = task.estimatedComplexity;
+      distribution[c] = (distribution[c] || 0) + 1;
+      if (c > maxComplexity) {
+        violations.push({
+          type: 'over-complexity',
+          id: task.id,
+          description: task.description,
+          parentId,
+          depth,
+          detail: `complexity ${c} exceeds max ${maxComplexity}`,
+        });
       }
-    })) {
-      if (message.type === 'assistant' && message.message?.content) {
-        for (const block of message.message.content) {
-          if ('text' in block) {
-            // Extract JSON array from response
-            const jsonMatch = block.text.match(/\[[\s\S]*\]/);
-            if (jsonMatch) {
-              try {
-                const parsed = JSON.parse(jsonMatch[0]);
-                subtasks.push(...parsed.map((st: any, idx: number) => ({
-                  id: `${task.id}.${idx + 1}`,
-                  description: st.description,
-                  acceptanceCriteria: st.acceptanceCriteria || [],
-                  estimatedComplexity: st.estimatedComplexity || 5,
-                  dependencies: st.dependencies || [],
-                  status: 'pending' as const,
-                  metadata: st.metadata
-                })));
-              } catch (e) {
-                console.error(`  ${'  '.repeat(depth)}✗ Failed to parse subtasks:`, e);
-              }
-            }
-          }
+      if (task.acceptanceCriteria.length === 0) {
+        violations.push({
+          type: 'missing-acceptance',
+          id: task.id,
+          description: task.description,
+          parentId,
+          depth,
+          detail: 'leaf task has no acceptance criteria',
+        });
+      }
+      if (task.metadata?.filesToModify === undefined) {
+        violations.push({
+          type: 'missing-files',
+          id: task.id,
+          description: task.description,
+          parentId,
+          depth,
+          detail: 'leaf task missing filesToModify metadata',
+        });
+      }
+      if (task.metadata?.testsRequired === undefined) {
+        violations.push({
+          type: 'missing-tests-required',
+          id: task.id,
+          description: task.description,
+          parentId,
+          depth,
+          detail: 'leaf task missing testsRequired metadata',
+        });
+      }
+      if (!task.metadata?.hints || task.metadata.hints.length === 0) {
+        violations.push({
+          type: 'missing-hints',
+          id: task.id,
+          description: task.description,
+          parentId,
+          depth,
+          detail: 'leaf task has no implementation hints',
+        });
+      }
+    } else {
+      if (!isRoot) {
+        const count = task.subtasks!.length;
+        if (count < 2 || count > 5) {
+          violations.push({
+            type: 'subtask-count',
+            id: task.id,
+            description: task.description,
+            parentId,
+            depth,
+            detail: `has ${count} subtask(s), expected 2-5`,
+          });
         }
       }
+      for (const child of task.subtasks!) {
+        walk(child, task.id, depth + 1, false);
+      }
     }
-  } catch (error) {
-    console.error(`  ${'  '.repeat(depth)}✗ Decomposition failed:`, error);
-    throw error;
   }
 
-  // Recursively decompose each subtask
-  const decomposedSubtasks = await Promise.all(
-    subtasks.map(st => decomposeTask(st, config, depth + 1))
-  );
+  walk(root, null, 0, true);
 
-  task.subtasks = decomposedSubtasks;
-  return task;
+  return {
+    valid: violations.length === 0,
+    maxComplexity,
+    totalLeafTasks: countLeafTasks(root),
+    violations,
+    stats: {
+      maxDepth: calculateMaxDepth(root),
+      leafComplexityDistribution: distribution,
+    },
+  };
 }
 
 /**

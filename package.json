@@ -27,7 +27,7 @@
     "url": "https://github.com/yourusername/fractal-planner.git"
   },
   "scripts": {
-    "build": "bun build ./src/index.ts --outdir dist --target node --format esm && tsc --emitDeclarationOnly",
+    "build": "bun build ./src/index.ts --outdir dist --target node --format esm && bun build ./src/cli/classify-intent.ts ./src/cli/generate-plan.ts ./src/cli/validate-tasks.ts ./src/cli/load-config.ts --outdir dist/cli --target node --format esm && tsc --emitDeclarationOnly",
     "dev": "tsc --watch",
     "clean": "rm -rf dist && find src skills -type f \\( -name '*.js' -o -name '*.d.ts' -o -name '*.js.map' -o -name '*.d.ts.map' \\) -delete",
     "lint": "oxlint",

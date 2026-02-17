@@ -19,34 +19,27 @@ describe('evaluateClearance', () => {
       expect(result.checklist.noAmbiguities).toBe(true);
       expect(result.checklist.technicalApproachDecided).toBe(true);
       expect(result.checklist.noBlockingQuestions).toBe(true);
+      expect(result.checklist.testStrategyIdentified).toBe(true);
     });
   });
 
   describe('coreObjectiveDefined', () => {
     test('passes with confirmedRequirements non-empty', async () => {
-      const draft = makeDraft({ userGoal: 'short', confirmedRequirements: ['req'] });
+      const draft = makeDraft({ confirmedRequirements: ['req'] });
       const result = await evaluateClearance(draft);
       expect(result.checklist.coreObjectiveDefined).toBe(true);
     });
 
-    test('passes with userGoal >10 chars', async () => {
-      const draft = makeDraft({ userGoal: 'this is long enough goal', confirmedRequirements: [] });
-      const result = await evaluateClearance(draft);
-      expect(result.checklist.coreObjectiveDefined).toBe(true);
-    });
-
-    test('fails at exactly 10 chars + empty requirements', async () => {
-      const draft = makeDraft({ userGoal: '1234567890', confirmedRequirements: [] });
-      expect(draft.findings.userGoal.length).toBe(10);
+    test('fails with empty confirmedRequirements even if goal is long', async () => {
+      const draft = makeDraft({ userGoal: 'this is a very detailed goal description', confirmedRequirements: [] });
       const result = await evaluateClearance(draft);
       expect(result.checklist.coreObjectiveDefined).toBe(false);
     });
 
-    test('passes with 11 char goal', async () => {
-      const draft = makeDraft({ userGoal: '12345678901', confirmedRequirements: [] });
-      expect(draft.findings.userGoal.length).toBe(11);
+    test('fails with empty confirmedRequirements', async () => {
+      const draft = makeDraft({ confirmedRequirements: [] });
       const result = await evaluateClearance(draft);
-      expect(result.checklist.coreObjectiveDefined).toBe(true);
+      expect(result.checklist.coreObjectiveDefined).toBe(false);
     });
   });
 
@@ -112,9 +105,50 @@ describe('evaluateClearance', () => {
     });
   });
 
+  describe('testStrategyIdentified', () => {
+    test('trivial intent always passes', async () => {
+      const draft = makeDraft({ intent: 'trivial', codebaseContext: undefined });
+      const result = await evaluateClearance(draft);
+      expect(result.checklist.testStrategyIdentified).toBe(true);
+    });
+
+    test('passes when codebaseContext.testStrategy is set', async () => {
+      const draft = makeDraft({
+        intent: 'mid-sized',
+        codebaseContext: {
+          relevantFiles: [],
+          existingPatterns: [],
+          testStrategy: 'unit tests',
+        },
+      });
+      const result = await evaluateClearance(draft);
+      expect(result.checklist.testStrategyIdentified).toBe(true);
+    });
+
+    test('passes when technicalDecisions has test-related key', async () => {
+      const draft = makeDraft({
+        intent: 'build-from-scratch',
+        codebaseContext: undefined,
+        technicalDecisions: { 'testing': 'jest with integration tests' },
+      });
+      const result = await evaluateClearance(draft);
+      expect(result.checklist.testStrategyIdentified).toBe(true);
+    });
+
+    test('fails when no test strategy and non-trivial', async () => {
+      const draft = makeDraft({
+        intent: 'build-from-scratch',
+        codebaseContext: undefined,
+        technicalDecisions: { approach: 'REST' },
+      });
+      const result = await evaluateClearance(draft);
+      expect(result.checklist.testStrategyIdentified).toBe(false);
+    });
+  });
+
   describe('gap generation', () => {
     test('critical gap for coreObjectiveDefined', async () => {
-      const draft = makeDraft({ userGoal: 'short', confirmedRequirements: [] });
+      const draft = makeDraft({ confirmedRequirements: [] });
       const result = await evaluateClearance(draft);
       const gap = result.gaps.find(g => g.item === 'coreObjectiveDefined');
       expect(gap).toBeDefined();
@@ -151,6 +185,19 @@ describe('evaluateClearance', () => {
       const gap = result.gaps.find(g => g.item === 'technicalApproachDecided');
       expect(gap).toBeDefined();
       expect(gap!.type).toBe('minor');
+    });
+
+    test('minor gap for testStrategyIdentified', async () => {
+      const draft = makeDraft({
+        intent: 'mid-sized',
+        codebaseContext: undefined,
+        technicalDecisions: { approach: 'standard' },
+      });
+      const result = await evaluateClearance(draft);
+      const gap = result.gaps.find(g => g.item === 'testStrategyIdentified');
+      expect(gap).toBeDefined();
+      expect(gap!.type).toBe('minor');
+      expect(gap!.suggestedQuestion).toContain('tested');
     });
 
     test('assumptions[0] used in ambiguity gap question', async () => {
