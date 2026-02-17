@@ -75,3 +75,23 @@ Optional. Enable via `.fractal-planner/config.json`:
 ```
 
 Requires Linear MCP server in `~/.claude/settings.json`. Schema enforces: `linear.enabled = true` requires `linear.teamId`.
+
+## Comment-Checker Hook
+
+A PostToolUse hook (`hooks/`) that warns when Claude adds unnecessary comments to code. Uses the `@code-yeongyu/comment-checker` Go binary (tree-sitter AST parsing, 30+ languages) installed as an optional dependency.
+
+Fires on `Write|Edit|MultiEdit|apply_patch` tool uses. If the binary isn't found, the hook silently skips.
+
+Configure via `.fractal-planner/config.json`:
+
+```json
+{
+  "commentChecker": {
+    "enabled": true,
+    "binaryPath": "/optional/explicit/path",
+    "customPrompt": "Optional custom prompt with {{comments}} placeholder"
+  }
+}
+```
+
+Or via env vars (take priority): `COMMENT_CHECKER_DISABLED=1`, `COMMENT_CHECKER_PATH`, `COMMENT_CHECKER_PROMPT`.

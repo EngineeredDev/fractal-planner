@@ -29,6 +29,12 @@ export const LinearConfigSchema = z.object({
   }).optional(),
 });
 
+export const CommentCheckerConfigSchema = z.object({
+  enabled:      z.boolean().default(true),
+  binaryPath:   z.string().optional(),
+  customPrompt: z.string().optional(),
+});
+
 const FractalPlannerConfigBaseSchema = z.object({
   maxComplexity:    z.number().int().min(1).max(10).default(5),
   maxIterations:    z.number().int().min(1).default(3),
@@ -39,6 +45,7 @@ const FractalPlannerConfigBaseSchema = z.object({
   plansDir:         z.string().default('.fractal-planner/plans'),
   permissionMode:   PermissionModeSchema.default('default'),
   linear:           LinearConfigSchema.default({ enabled: false }),
+  commentChecker:   CommentCheckerConfigSchema.default({ enabled: true }),
 });
 
 export const FractalPlannerConfigSchema = FractalPlannerConfigBaseSchema.refine(
