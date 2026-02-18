@@ -65,7 +65,8 @@ export const validLinearConfig = {
     pending: 'Todo',
     'in-progress': 'In Progress',
     completed: 'Done',
-    failed: 'Canceled'
+    failed: 'Canceled',
+    review: 'In Review'
   }
 };
 
@@ -77,7 +78,8 @@ export const linearConfigWithoutUserId = {
     pending: 'Todo',
     'in-progress': 'In Progress',
     completed: 'Done',
-    failed: 'Canceled'
+    failed: 'Canceled',
+    review: 'In Review'
   }
 };
 

@@ -26,6 +26,7 @@ export const LinearConfigSchema = z.object({
     'in-progress':   z.string(),
     completed:       z.string(),
     failed:          z.string(),
+    review:          z.string().optional(),
   }).optional(),
 });
 
@@ -38,8 +39,11 @@ export const CommentCheckerConfigSchema = z.object({
 const FractalPlannerConfigBaseSchema = z.object({
   maxComplexity:    z.number().int().min(1).max(10).default(3),
   maxIterations:    z.number().int().min(1).default(3),
+  maxParallelTasks: z.number().int().min(1).default(1),
   researchOnly:     z.boolean().default(false),
   planOnly:         z.boolean().default(false),
+  skipPlanReview:   z.boolean().default(false),
+  preAnalysis:      z.boolean().default(true),
   enableAgentTeams: z.boolean().default(true),
   noCommit:         z.boolean().default(false),
   plansDir:         z.string().default('.fractal-planner/plans'),

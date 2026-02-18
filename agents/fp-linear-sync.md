@@ -29,13 +29,14 @@ Call `mcp__linear-server__list_teams` as a health check. If it fails, report the
 
 Call `mcp__linear-server__list_issue_statuses` for the configured `teamId`.
 
-**If `statusMap` is configured**: Match each status name against the team's available statuses by name. Fall back to auto-detect for any that don't match, with a warning.
+**If `statusMap` is configured**: Match each status name against the team's available statuses by name. Fall back to auto-detect for any that don't match, with a warning. For `review`: if `statusMap.review` is set, match by name; if not set, auto-detect by name ("In Review", case-insensitive), falling back to the resolved `completed` UUID.
 
 **If `statusMap` is NOT configured** (default): Auto-detect by status **type**:
 - `pending` -> first status of type `backlog` (or `unstarted` if no backlog)
 - `in-progress` -> first status of type `started`
 - `completed` -> first status of type `completed`
 - `failed` -> first status of type `canceled`
+- `review` -> first status with name matching "In Review" (case-insensitive). If no match, fall back to the resolved `completed` UUID.
 
 ### 3. Preview & Confirm
 
@@ -103,7 +104,8 @@ Write to `{planDir}/linear-mapping.json`:
     "pending": "status-uuid",
     "in-progress": "status-uuid",
     "completed": "status-uuid",
-    "failed": "status-uuid"
+    "failed": "status-uuid",
+    "review": "status-uuid"
   },
   "tasks": {
     "root": { "linearIssueId": "...", "linearIdentifier": "TEAM-42" },

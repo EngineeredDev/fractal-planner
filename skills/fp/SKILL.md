@@ -41,13 +41,29 @@ mkdir -p ".fractal-planner/plans/${planId}"
 
 Capture the echoed `planId`. **Do not proceed until it is a non-empty string and the directory exists.**
 
-## Step 3: Environment & Configuration (pre-injected)
+After confirming the directory, scan for interrupted implementation sessions:
 
-The following values were resolved at skill load time by `resolve-env.sh`. Do NOT re-run these commands — use the values directly.
+```bash
+grep -rl "IN_PROGRESS" .fractal-planner/plans/*/progress.md 2>/dev/null
+```
 
-!`$CLAUDE_PLUGIN_ROOT/skills/fp/scripts/resolve-env.sh`
+For each matching file path, extract the planId from the path (the segment between `plans/` and `/progress.md`) and show a non-blocking notice to the user:
 
-Parse the output above to extract these four values:
+> Notice: Plan `{planId}` has an interrupted implementation session. Run `/fp:implement {planId}` to resume it.
+
+This is informational only — continue to Step 3 regardless.
+
+## Step 3: Resolve Plugin Root & Environment
+
+This SKILL.md is located at `skills/fp/SKILL.md` relative to the plugin root. From the skill/plugin metadata in your context, determine the **absolute path** to the plugin root directory (the ancestor containing `.claude-plugin/`). Store it as `PLUGIN_ROOT`.
+
+Run the environment resolver (single bash call — returns plugin root, CLI runner, CLI dir, and full merged config):
+
+```bash
+CLAUDE_PLUGIN_ROOT="<PLUGIN_ROOT>" bash "<PLUGIN_ROOT>/skills/fp/scripts/resolve-env.sh"
+```
+
+This outputs four key-value lines. Parse them:
 - **PLUGIN_ROOT** — absolute path to the plugin repository root
 - **CLI_RUNNER** — `bun` or `node`
 - **CLI_DIR** — absolute path to CLI helper directory (source TS or compiled JS)
@@ -56,23 +72,28 @@ Parse the output above to extract these four values:
 From CONFIG_JSON, extract and remember these for all subsequent steps:
 - `maxComplexity` (default: 3) — used in Step 7, Step 7.5
 - `maxIterations` (default: 3) — used in Step 7
+- `maxParallelTasks` (default: 1) — passed to implement (controls parallel wave execution)
 - `researchOnly` (default: false) — if true, stop after Step 6
 - `planOnly` (default: false) — if true, stop after Step 8
+- `skipPlanReview` (default: false) — if true, skip Step 9 plan review gate
+- `preAnalysis` (default: true) — if true, run fp-analyst for complex intents (Step 4.7)
 - `noCommit` (default: false) — passed to implement
 - `linear.enabled` (default: false) — controls Step 9/10
 - `linear.teamId`, `linear.projectId`, `linear.userId` — used in Step 10
 
-If CONFIG_JSON contains `"_error"`, use defaults: maxComplexity=3, maxIterations=3, all booleans false, linear disabled.
+If CONFIG_JSON contains `"_error"`, use defaults: maxComplexity=3, maxIterations=3, maxParallelTasks=1, all booleans false, linear disabled.
 
 ## Step 4: Classify Intent
 
-Intent classification was run at skill load time. Do NOT re-run — use the value directly.
+Run the deterministic intent classifier using CLI_RUNNER and CLI_DIR from Step 3:
 
-!`$CLAUDE_PLUGIN_ROOT/skills/fp/scripts/classify-intent-wrapper.sh $ARGUMENTS`
+```bash
+${CLI_RUNNER} ${CLI_DIR}/classify-intent.* "<goal text>"
+```
 
-The output above is JSON: `{ "intent": "...", "strategy": { "researchFirst": ..., "focusAreas": [...], "initialQuestions": [...], "researchPrompts": [...] } }`
+This outputs JSON: `{ "intent": "...", "strategy": { "researchFirst": ..., "focusAreas": [...], "initialQuestions": [...], "researchPrompts": [...] } }`
 
-Parse and store the `intent` and `strategy` for the next step.
+Capture the output for the next step.
 
 ## Step 4.5: Quick Project Structure Scan
 
@@ -83,6 +104,39 @@ ls -1 src/ 2>/dev/null | head -20
 ```
 
 Capture this output as `PROJECT_STRUCTURE` for the next step.
+
+## Step 4.7: Pre-Interview Analysis (conditional)
+
+If **both** of the following are true, spawn the pre-interview analyst:
+- `preAnalysis` (from Step 3) is `true`
+- The intent from Step 4 is one of: `mid-sized`, `build-from-scratch`, `architecture`
+
+Otherwise, skip this step and set `preAnalysisFindings` to `null`.
+
+If running the analyst:
+
+```
+Task(
+  subagent_type: "fp-analyst",
+  description: "Pre-interview codebase analysis",
+  mode: "acceptEdits",
+  prompt: "Analyze the codebase for hidden complexity and risk factors before the requirements interview.
+
+Goal: <goal text>
+Intent: <intent from Step 4>
+Plan directory: .fractal-planner/plans/<planId>
+
+Write pre-analysis.md to the plan directory."
+)
+```
+
+After the analyst completes, read `.fractal-planner/plans/{planId}/pre-analysis.md` and extract:
+- `hiddenComplexityFlags` — key complexity findings
+- `riskItems` — high-risk areas
+- `ambiguityCandidates` — terms/choices needing clarification
+- `suggestedFocusAreas` — recommended interview topics
+
+Store all of this as `preAnalysisFindings` for use in Step 5b (injected into the interviewer prompt).
 
 ## Step 5: Requirements Interview (Phase 0)
 
@@ -106,6 +160,7 @@ Task(
   name: "interviewer",
   team_name: "fp-interview-<planId>",
   description: "Requirements interview",
+  mode: "acceptEdits",
   prompt: "You are the requirements interviewer on the fp-interview-<planId> team.
 
 Your job is to conduct a research-grounded, iterative requirements interview. You CANNOT talk to the user directly — send all questions to the team lead via SendMessage, and the lead will relay user answers back to you.
@@ -119,6 +174,7 @@ Your job is to conduct a research-grounded, iterative requirements interview. Yo
   - Initial questions: <initialQuestions from step 4>
 - Research Prompts: <researchPrompts from step 4, one per line — if empty, skip the scan>
 - Project Structure: <PROJECT_STRUCTURE from step 4.5>
+- Pre-Analysis Findings: <if preAnalysisFindings is not null, paste pre-analysis.md contents; otherwise write 'none'>
 - Plan directory: .fractal-planner/plans/<planId>
 
 ## Process
@@ -126,6 +182,8 @@ Your job is to conduct a research-grounded, iterative requirements interview. Yo
 ### 1. Quick Context Scan (before asking any questions)
 
 For non-trivial intents, do a quick codebase scan before your first question. This grounds your questions in concrete findings instead of generic prompts.
+
+If Pre-Analysis Findings are provided (not 'none'), use them to sharpen your focus — the analyst has already identified complexity flags and ambiguity candidates. Use those as your starting point and supplement with targeted additional scans rather than rediscovering them from scratch.
 
 - Use Glob to find files matching goal keywords (e.g., **/*auth* for an auth feature)
 - Use Grep for 2-3 targeted pattern searches guided by the research prompts
@@ -366,14 +424,21 @@ You are now the relay between the interviewer and the user. Follow this protocol
 
 3. Read `.fractal-planner/plans/${planId}/interview.json` to get the structured findings for subsequent phases.
 
-## Step 6: Research & Gap Analysis (Phase 1)
+## Step 6: Research & Context Building (Phase 1)
 
-Read the interview findings, then spawn the researcher agent:
+Read `interview.json` from the plan directory. Extract the **Research Agenda**:
+- `codebaseContext.relevantFiles` — files the interviewer already identified as relevant
+- `technicalDecisions` — decisions that need verification or implementation detail
+- `scopeExclusions` — areas to avoid during research
+
+Spawn **both** research agents in parallel using `run_in_background: true`:
 
 ```
 Task(
   subagent_type: "fp-researcher",
-  description: "Codebase research",
+  description: "Codebase research for planned feature",
+  run_in_background: true,
+  mode: "acceptEdits",
   prompt: "Research the codebase for the following planned feature.
 
 Goal: <goal text>
@@ -381,13 +446,37 @@ Goal: <goal text>
 Interview Findings:
 <paste interview.json contents>
 
+Research Agenda:
+- Confirmed relevant files (from interviewer scan — verify and explore deeper):
+  <codebaseContext.relevantFiles from interview.json, one per line — or 'none identified'>
+- Technical decisions to verify:
+  <technicalDecisions from interview.json as key: value pairs — or 'none'>
+- Scope exclusions (do NOT research these areas):
+  <scopeExclusions from interview.json, one per line — or 'none'>
+
 Plan directory: .fractal-planner/plans/<planId>
 
-Write research.md and context.md to the plan directory."
+Write research.md to the plan directory. Do NOT write context.md (that is handled by a parallel agent)."
 )
 ```
 
-**If `researchOnly` (from Step 3) is true**: After the researcher completes, read `research.md` and `context.md`, present a summary to the user, and stop.
+```
+Task(
+  subagent_type: "fp-context-builder",
+  description: "Build codebase context summary",
+  run_in_background: true,
+  mode: "acceptEdits",
+  prompt: "Build a static codebase context summary.
+
+Plan directory: .fractal-planner/plans/<planId>
+
+Write context.md to the plan directory."
+)
+```
+
+Both agents run in parallel. **Wait for both** to complete by calling TaskOutput on both task IDs in a single message (parallel blocking calls). Then read `research.md` and `context.md` from the plan directory.
+
+**If `researchOnly` (from Step 3) is true**: After both agents complete, read `research.md` and `context.md`, present a summary to the user, and stop.
 
 ## Step 7: Fractal Decomposition (Phase 2)
 
@@ -397,6 +486,7 @@ Read research.md and context.md, then spawn the decomposer agent:
 Task(
   subagent_type: "fp-decomposer",
   description: "Task decomposition",
+  mode: "acceptEdits",
   prompt: "Decompose the following goal into a task tree.
 
 Goal: <goal text>
@@ -441,6 +531,7 @@ This outputs JSON: `{ "valid": true/false, "maxComplexity": N, "totalLeafTasks":
 Task(
   subagent_type: "fp-decomposer",
   description: "Fix task tree violations",
+  mode: "acceptEdits",
   prompt: "The task tree validation found violations. Fix ONLY the flagged tasks — preserve everything else.
 
 Goal: <goal text>
@@ -469,7 +560,64 @@ General:
 
 3. After the decomposer completes, re-run `validate-tasks` CLI.
 4. If still invalid and retries remain, repeat from step 1.
-5. If still invalid after 6 total passes, warn: "Task tree still has violations after 6 decomposition passes. Proceeding with current tree." and continue to Step 8.
+5. If still invalid after 6 total passes, warn: "Task tree still has violations after 6 decomposition passes. Proceeding with current tree." and continue to Step 7.6.
+
+## Step 7.6: Plan Quality Critique
+
+Spawn the plan critic agent:
+
+```
+Task(
+  subagent_type: "fp-critic",
+  description: "Plan quality critique",
+  mode: "acceptEdits",
+  prompt: "Evaluate the quality of the task decomposition.
+
+Tasks file: .fractal-planner/plans/<planId>/tasks.md
+Interview file: .fractal-planner/plans/<planId>/interview.json
+Plan directory: .fractal-planner/plans/<planId>
+
+Read both files and write critique.md to the plan directory."
+)
+```
+
+After the critic completes, read `.fractal-planner/plans/{planId}/critique.md`. Parse the `Overall Result` line to extract:
+- `critiqueResult`: PASS, WARN, or FAIL
+- `failCount` and `warnCount` from the CRITIQUE COMPLETE output or the critique.md summary
+
+**If `critiqueResult` is FAIL** (re-decomposition loop, independent retry counter, max 3 passes):
+
+1. Read the current `tasks.md` and the `## Recommendations` section from `critique.md`.
+2. Spawn `fp-decomposer` with targeted critique feedback:
+
+```
+Task(
+  subagent_type: "fp-decomposer",
+  description: "Fix critic-flagged quality issues",
+  mode: "acceptEdits",
+  prompt: "The plan quality critic found issues. Fix ONLY the flagged tasks — preserve everything else.
+
+Goal: <goal text>
+Max Complexity: <maxComplexity>
+
+Critic Recommendations:
+<paste Recommendations section from critique.md>
+
+Current tasks.md:
+<paste full tasks.md>
+
+Write the updated tasks.md to: .fractal-planner/plans/<planId>/tasks.md"
+)
+```
+
+3. Re-run `validate-tasks` CLI (Step 7.5) on the updated tree.
+4. Re-spawn the critic (Step 7.6) on the updated tree.
+5. If still FAIL and critic retries remain, repeat from step 1.
+6. If still FAIL after 3 critic-triggered passes, warn: "Plan quality still has FAIL findings after 3 critic passes. Proceeding to Step 8." and continue.
+
+**If `critiqueResult` is WARN**: Store `critiqueWarnings` (the list of WARN findings from `critique.md`). They will be surfaced in Step 9.
+
+**If `critiqueResult` is PASS**: Proceed to Step 8.
 
 ## Step 8: Generate Plan (Phase 3)
 
@@ -481,11 +629,9 @@ ${CLI_RUNNER} ${CLI_DIR}/generate-plan.* "<planId>"
 
 This reads `tasks.md`, computes execution order, and writes `plan.md`.
 
-## Step 9: Plan Review & Confirmation Gate (conditional)
+## Step 9: Plan Review & Confirmation Gate
 
-Check `linear.enabled` from Step 3. If it is NOT `true`, skip directly to Step 11.
-
-If `linear.enabled` is `true`:
+If `skipPlanReview` (from Step 3) is `true`, skip directly to Step 10.
 
 Read both `tasks.md` and `plan.md` from the plan directory. From `plan.md`, count the total leaf tasks in the `## Execution Order` section. From `tasks.md`, build a condensed tree view showing the full parent-child hierarchy.
 
@@ -511,12 +657,24 @@ Format rules:
 - Omit acceptance criteria, dependencies, and tests-required (builder/verifier details, not needed for approval)
 - Summary line at the end: leaf count, complexity range (min-max of leaf tasks), approximate file count (unique files across all leaf tasks)
 
-Then call `AskUserQuestion` with 3 options:
+If the plan critic (Step 7.6) found WARN items (`critiqueWarnings` is not empty), surface them before the user options:
+
+> **Plan Quality Notices** (from automated review):
+> {list each warning from critiqueWarnings, one per line}
+> These are warnings only — the plan is valid but may benefit from refinement.
+
+Then call `AskUserQuestion` with options that adapt based on `linear.enabled`:
+
+**If `linear.enabled` is `true`** (3 options):
 - **"Create Linear issues"** — proceed to Step 10
-- **"Skip Linear issues and proceed"** — skip to Step 11
+- **"Skip Linear and proceed"** — skip to Step 11
 - **"Discuss the plan more"** — enter discussion loop
 
-**Discussion loop**: If the user picks "Discuss the plan more", address their feedback or questions, then re-present the same 3 options via `AskUserQuestion`. Loop until the user picks "Create Linear issues" or "Skip Linear issues and proceed". This loop is for Q&A only — it does NOT modify plan.md or tasks.md.
+**If `linear.enabled` is `false`** (2 options):
+- **"Proceed to implementation"** — skip to Step 11
+- **"Discuss the plan more"** — enter discussion loop
+
+**Discussion loop**: If the user picks "Discuss the plan more", address their feedback or questions, then re-present the same options via `AskUserQuestion`. Loop until the user picks a "proceed" or "create" option. This loop is for Q&A only — it does NOT modify plan.md or tasks.md.
 
 ## Step 10: Linear Sync (Phase 3.5, conditional)
 
@@ -530,6 +688,7 @@ Spawn the Linear sync agent in the **foreground** (do NOT use `run_in_background
 Task(
   subagent_type: "fp-linear-sync",
   description: "Linear issue sync",
+  mode: "acceptEdits",
   prompt: "Create Linear issues for the task tree.
 
 The user has already reviewed and approved this plan. Proceed directly to issue creation without an additional preview confirmation.
@@ -579,9 +738,10 @@ If `planOnly` (from Step 3) is true, note that execution was skipped per config.
 ## Important
 
 - **ALWAYS** use configuration from Step 3 (pre-injected at skill load time) — config values control complexity thresholds, flow gates, and Linear integration
-- **ALWAYS** run phases in order: interview -> research -> decomposition -> planning -> (confirmation gate) -> (linear) -> present results
+- **ALWAYS** run phases in order: interview -> research+context (parallel) -> decomposition -> (critique) -> planning -> (confirmation gate) -> (linear) -> present results
 - **NEVER** skip the interview — even for trivial tasks
 - Pass data between phases via the plan directory files
 - Each agent writes its own artifacts — do not write their files for them
-- Confirmation gate (Step 9) only appears when `linear.enabled === true` in config
+- Confirmation gate (Step 9) fires for ALL users unless `skipPlanReview === true` in config
+- Step 9 options adapt based on `linear.enabled` — Linear-specific options only shown when Linear is configured
 - Linear sync (Step 10) must run in the **foreground** — never use `run_in_background`

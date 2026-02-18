@@ -190,6 +190,41 @@ describe('Config loading system', () => {
     });
   });
 
+  describe('statusMap.review field', () => {
+    test('accepts statusMap with optional review key', async () => {
+      const config = await loadConfig({
+        linear: {
+          enabled: true,
+          teamId: 'team-123',
+          statusMap: {
+            pending: 'Todo',
+            'in-progress': 'In Progress',
+            completed: 'Done',
+            failed: 'Canceled',
+            review: 'In Review'
+          }
+        }
+      });
+      expect(config.linear.statusMap?.review).toBe('In Review');
+    });
+
+    test('statusMap works without review key', async () => {
+      const config = await loadConfig({
+        linear: {
+          enabled: true,
+          teamId: 'team-123',
+          statusMap: {
+            pending: 'Todo',
+            'in-progress': 'In Progress',
+            completed: 'Done',
+            failed: 'Canceled'
+          }
+        }
+      });
+      expect(config.linear.statusMap?.review).toBeUndefined();
+    });
+  });
+
   describe('userId field integration', () => {
     test('userId is optional in linear config', async () => {
       const config = await loadConfig({

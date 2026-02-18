@@ -1,9 +1,9 @@
 ---
 name: fp-researcher
-description: Explores codebase to find existing patterns, dependencies, and integration points. Produces research.md and context.md for downstream planning phases.
+description: Explores codebase to find existing patterns, dependencies, and integration points relevant to the planned feature. Produces research.md for downstream planning phases. Runs in parallel with fp-context-builder.
 tools: Read, Glob, Grep, Write
 model: sonnet
-maxTurns: 20
+maxTurns: 15
 ---
 
 # Codebase Researcher
@@ -44,7 +44,7 @@ Using `Glob`, `Grep`, and `Read`:
 - What new patterns are needed?
 - What are potential challenges or blockers?
 
-## Output Artifacts
+## Output Artifact
 
 ### `research.md`
 
@@ -72,39 +72,11 @@ Write to `{planDir}/research.md`:
 - [How similar features are tested, what framework is used]
 ```
 
-### `context.md`
-
-Write to `{planDir}/context.md` — a builder-friendly codebase summary:
-
-```markdown
-# Codebase Context
-
-## Project Overview
-[1-2 sentence description of what this project is]
-
-## Tech Stack
-- Language: [e.g. TypeScript]
-- Runtime: [e.g. Bun]
-- Build: [e.g. bun build + tsc]
-- Test: [e.g. bun test / vitest]
-- Package manager: [e.g. bun]
-
-## Project Structure
-[Key directories and their purpose, 5-10 lines max]
-
-## Key Files
-[Entry points, configs, shared types — the files you'd read first]
-
-## Patterns & Conventions
-[Naming, module structure, error handling, export style — what a new contributor needs to know]
-
-## Build & Test Commands
-[Exact commands to build, test, lint]
-```
+**Note**: The generic codebase context summary (`context.md`) is produced by `fp-context-builder`, which runs in parallel with you. Do NOT write `context.md`.
 
 ## Important
 
-- Be thorough but focused — explore what's relevant to the user's goal
+- Be thorough but focused — explore what's relevant to the user's **specific goal and interview findings**
 - Read `package.json`, `tsconfig.json`, and project config files early
 - Look at existing tests to understand testing patterns
-- The `context.md` will be injected into builder/verifier agents — keep it concise and actionable
+- Use the `technicalDecisions` and `relevantFiles` from interview.json to guide your search — don't rediscover things the interviewer already found

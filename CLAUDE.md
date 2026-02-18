@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Fractal Planner is a Claude Code plugin that provides an iterative planning and execution framework. It breaks complex features into progressively smaller tasks (fractal decomposition) and uses builder/verifier agent teams for implementation. Optionally integrates with Linear for issue tracking.
+Fractal Planner is a Claude Code plugin that provides an iterative planning and execution framework. It breaks complex features into progressively smaller tasks (fractal decomposition) and uses builder agent teams with lead-spawned verification subagents for implementation. Optionally integrates with Linear for issue tracking.
 
 ## Commands
 
@@ -27,8 +27,8 @@ Run a single test file: `bun test src/__tests__/config.test.ts`
 
 ### Skills (Markdown prompts — not compiled TypeScript)
 
-- **`/fp:plan`** (`skills/fp/SKILL.md`) — Thin orchestrator that coordinates each phase: interview (agent team with lead-relay) → research → decomposition → planning → (Linear sync). Uses `!`command`` blocks to pre-inject environment, configuration, and intent classification at skill load time via shell scripts in `skills/fp/scripts/` (`resolve-env.sh`, `classify-intent-wrapper.sh`). Remaining CLI helpers (validate-tasks, generate-plan) run as Claude-executed bash since they depend on runtime `planId`.
-- **`/fp:implement`** (`skills/implement/SKILL.md`) — Loads a plan by `planId`, spawns builder/verifier agent team, executes leaf tasks in dependency order, handles commits, optionally syncs to Linear.
+- **`/fp:plan`** (`skills/fp/SKILL.md`) — Thin orchestrator that coordinates each phase: interview (agent team with lead-relay) → research → decomposition → planning → (Linear sync). Uses `resolve-env.sh` to resolve plugin root, CLI runner, CLI directory, and full merged config in a single bash call. Claude derives the plugin root from skill metadata context. CLI helpers (validate-tasks, generate-plan) also run as Claude-executed bash.
+- **`/fp:implement`** (`skills/implement/SKILL.md`) — Loads a plan by `planId`, spawns a persistent tracker teammate + ephemeral builder teammates with fresh verification subagents per iteration, executes leaf tasks in dependency order, handles commits, maintains `progress.md` for session resume, optionally syncs to Linear via the tracker.
 - **`/fp:commit`** (`skills/commit/SKILL.md`) — Git commit with style detection (SEMANTIC/PLAIN/SHORT) and language detection (KOREAN/ENGLISH).
 
 ### Custom Agents (`agents/`)
@@ -39,17 +39,17 @@ Subagents spawned by `/fp:plan` orchestrator:
 - **`fp-researcher`** — Phase 1: explores codebase, writes `research.md` + `context.md`. Tools: `Read, Glob, Grep, Write`. Model: sonnet. MaxTurns: 20.
 - **`fp-decomposer`** — Phase 2: fractal task decomposition, writes `tasks.md`. Tools: `Read, Grep, Write`. Model: sonnet. MaxTurns: 15.
 - **`fp-linear-sync`** — Phase 3.5: creates Linear issues mirroring task tree in execution order from `plan.md` (conditional on config), writes `linear-mapping.json`. Tools: `AskUserQuestion, Read, Write, mcp__linear-server__*`. Model: sonnet. MaxTurns: 25.
+- **`fp-task-tracker`** — Implementation phase: passive progress recorder and Linear sync agent on `fp-impl-{planId}` team. Updates status columns in a pre-populated `progress.md` (lead writes the initial file) and syncs to Linear. Does not compute dependencies or write source code. Receives only task IDs — no descriptions, criteria, or file paths. Tools: `Read, Write, SendMessage, mcp__linear-server__update_issue`. Model: sonnet. MaxTurns: 50.
 
-### Skill Load-Time Scripts (`skills/fp/scripts/`)
+### Helper Scripts (`skills/fp/scripts/`)
 
-Shell scripts executed via `!`command`` in SKILL.md at skill load time (before Claude sees the prompt):
+Shell scripts invoked by the orchestrator via Claude-executed bash (Claude supplies the plugin root from skill metadata):
 
-- **`resolve-env.sh`** — Resolves `PLUGIN_ROOT`, `CLI_RUNNER`, `CLI_DIR`, and loads full merged config JSON via `load-config`. Output is injected inline into the SKILL.md prompt.
-- **`classify-intent-wrapper.sh`** — Thin wrapper that resolves bun/node and runs `classify-intent` CLI with the goal text. Receives `$ARGUMENTS` (substituted before `!`command`` runs).
+- **`resolve-env.sh`** — Resolves `PLUGIN_ROOT`, `CLI_RUNNER`, `CLI_DIR`, and loads full merged config JSON via `load-config`. Returns all four values in a single call, replacing the multi-step bash blocks that were previously inline in SKILL.md.
 
 ### CLI Helpers (`src/cli/`)
 
-Deterministic TypeScript scripts. `classify-intent` and `load-config` are called at skill load time via the scripts above. `validate-tasks` and `generate-plan` are invoked by Claude at runtime (they depend on `planId`):
+Deterministic TypeScript scripts invoked by the orchestrator via Claude-executed bash. `load-config` is called indirectly through `resolve-env.sh`; the rest are called directly:
 
 - **`classify-intent.ts`** — Classifies user goal intent, outputs `{ intent, strategy }` JSON. Wraps `classifyIntent()` + `getQuestionStrategy()` from `src/utils/question-strategies.ts`.
 - **`load-config.ts`** — Loads merged config (user + project + defaults), outputs resolved JSON. Wraps `loadConfig()` from `src/config.ts`.
@@ -66,7 +66,7 @@ Deterministic TypeScript scripts. `classify-intent` and `load-config` are called
 
 ### Runtime artifacts
 
-Plans are stored in `.fractal-planner/plans/{planId}/` (gitignored) with files like `interview.md`, `research.md`, `context.md`, `tasks.md`, `plan.md`, `linear-mapping.json`. Plan IDs are timestamps (`YYYYMMDD-HHmmss`).
+Plans are stored in `.fractal-planner/plans/{planId}/` (gitignored) with files like `interview.md`, `research.md`, `context.md`, `tasks.md`, `plan.md`, `linear-mapping.json`, `progress.md`. Plan IDs are timestamps (`YYYYMMDD-HHmmss`).
 
 ### Agent communication protocol
 
@@ -78,10 +78,17 @@ Agents communicate via structured text messages.
 - Interviewer → Lead: `"CLEARANCE ACHIEVED\nArtifacts written to .fractal-planner/plans/{planId}/"`
 - Interviewer → Lead: `"DRAFT UPDATED (Round N)\nClearance: M/6 passed\nGaps: <list>"`
 
-**Builder/verifier (implementation):**
-- Builder: `"Task {id} implementation complete. Ready for verification.\n\nFILES_MODIFIED:\n- ..."`
-- Verifier pass: `"VERIFICATION PASSED\nTask: {id}\nCriteria: N/N passed\n..."`
-- Verifier fail: `"VERIFICATION FAILED\nTask: {id}\nFailures:\n- [FAIL]..."`
+**Builder/verification (implementation — lead-spawned verifier):**
+- Builder implements, messages lead with "IMPLEMENTATION COMPLETE" + FILES_MODIFIED
+- Lead spawns fresh verification subagent (Task tool) per iteration
+- Verifier reads code, runs tests/typecheck, checks acceptance criteria
+- If pass: lead commits, moves to next task
+- If fail: lead re-spawns fresh builder with failure report
+- Both builder and verifier get fresh context every iteration
+
+**Tracker (implementation progress):**
+- Lead → Tracker: `"TASK_STARTED: {id}"`, `"TASK_COMPLETED: {id}\nIterations: n/max\nCommit: hash\nSummary: text"`, `"TASK_FAILED: {id}\nIterations: n/max\nReason: text"`, `"TASK_SKIPPED: {id}\nReason: text"`, `"ROLLUP_PARENTS"`, `"GET_SUMMARY"`
+- Tracker → Lead: `"TRACKER READY\nResumed: yes/no\n..."`, `"ACK_STARTED: {id}"`, `"ACK_COMPLETED: {id}"`, `"ACK_FAILED: {id}"`, `"ACK_SKIPPED: {id}"`, `"ROLLUP_COMPLETE"`, `"PROGRESS_SUMMARY\n..."`
 
 ## Key Conventions
 
