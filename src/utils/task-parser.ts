@@ -18,6 +18,7 @@ interface MetadataLines {
   guardrails: string[];
   testCommands: string[];
   complexity?: number;
+  dimensions?: Record<string, number>;
 }
 
 const TASK_LINE_RE = /^(\s*)-\s*\[ID:\s*([^\]]+)\]\s*(.+?)\s*\(Complexity:\s*(\d+)\)\s*$/;
@@ -32,6 +33,7 @@ const HINTS_RE = /^\s*-\s*Hints:\s*(.*)$/;
 const REFERENCES_RE = /^\s*-\s*References:\s*(.*)$/;
 const GUARDRAILS_RE = /^\s*-\s*Guardrails:\s*(.*)$/;
 const TEST_COMMANDS_RE = /^\s*-\s*Test Commands:\s*(.+)$/;
+const DIMENSIONS_RE = /^\s*-\s*Complexity Dimensions:\s*(.+)$/;
 
 type BlockKey = 'acceptance' | 'hints' | 'references' | 'guardrails';
 
@@ -193,6 +195,22 @@ function collectMetadata(lines: string[], startIdx: number): MetadataLines {
       continue;
     }
 
+    const dimensionsMatch = line.match(DIMENSIONS_RE);
+    if (dimensionsMatch) {
+      currentBlock = null;
+      const dims: Record<string, number> = {};
+      for (const pair of dimensionsMatch[1].split(/,\s*/)) {
+        const eqIdx = pair.indexOf('=');
+        if (eqIdx > 0) {
+          const key = pair.slice(0, eqIdx).trim();
+          const val = parseInt(pair.slice(eqIdx + 1).trim(), 10);
+          if (key && !isNaN(val)) dims[key] = val;
+        }
+      }
+      if (Object.keys(dims).length > 0) meta.dimensions = dims;
+      continue;
+    }
+
     if (currentBlock) {
       const item = parseBlockItem(line);
       if (item) {
@@ -278,7 +296,7 @@ export function parseTasksMarkdown(markdown: string): Task {
     if (ft.metadata.guardrails.length > 0) metadata.guardrails = ft.metadata.guardrails;
     if (ft.metadata.testCommands.length > 0) metadata.testCommands = ft.metadata.testCommands;
 
-    return {
+    const task: Task = {
       id: ft.id,
       description: ft.description,
       estimatedComplexity: ft.complexity,
@@ -287,6 +305,19 @@ export function parseTasksMarkdown(markdown: string): Task {
       status: 'pending',
       metadata,
     };
+
+    if (ft.metadata.dimensions) {
+      const d = ft.metadata.dimensions;
+      task.complexityDimensions = {
+        scope: d.scope ?? 0,
+        risk: d.risk ?? 0,
+        novelty: d.novelty ?? 0,
+        integration: d.integration ?? 0,
+        testing: d.testing ?? 0,
+      };
+    }
+
+    return task;
   };
 
   return buildTree(flatTasks, toTask);

@@ -13,7 +13,7 @@ if (!planId) {
 }
 
 async function main() {
-  await loadConfig();
+  const config = await loadConfig();
 
   const plansDir = join(process.cwd(), '.fractal-planner', 'plans', planId);
   const tasksPath = join(plansDir, 'tasks.md');
@@ -28,7 +28,7 @@ async function main() {
 
   const rootTask = parseTasksMarkdown(tasksMarkdown);
   const plan = await createImplementationPlan(rootTask);
-  const executionOrder = getExecutionOrder(rootTask);
+  const executionOrder = getExecutionOrder(rootTask, config.executionOrder);
 
   const lines: string[] = [
     '# Implementation Plan',

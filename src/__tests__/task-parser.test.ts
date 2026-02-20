@@ -611,6 +611,97 @@ Just some text with no task lines.
     expect(t22.metadata?.hints).toEqual(['Use table-driven pattern']);
   });
 
+  test('parses Complexity Dimensions line into complexityDimensions', () => {
+    const md = `- [ID: 1.1] Create JWT utility (Complexity: 3)
+  - Complexity Dimensions: scope=2, risk=3, novelty=2, integration=1, testing=3
+  - Acceptance: Signs tokens, Verifies tokens
+  - Dependencies: none
+  - Files: src/utils/jwt.ts
+  - Tests Required: yes
+`;
+    const task = parseTasksMarkdown(md);
+    expect(task.complexityDimensions).toEqual({
+      scope: 2,
+      risk: 3,
+      novelty: 2,
+      integration: 1,
+      testing: 3,
+    });
+  });
+
+  test('Complexity Dimensions with partial fields fills missing with 0', () => {
+    const md = `- [ID: t1] Partial dims (Complexity: 3)
+  - Complexity Dimensions: scope=4, risk=2
+  - Acceptance: Works
+  - Dependencies: none
+  - Files: src/thing.ts
+  - Tests Required: yes
+`;
+    const task = parseTasksMarkdown(md);
+    expect(task.complexityDimensions).toEqual({
+      scope: 4,
+      risk: 2,
+      novelty: 0,
+      integration: 0,
+      testing: 0,
+    });
+  });
+
+  test('task without Complexity Dimensions has no complexityDimensions field', () => {
+    const md = `- [ID: t1] No dims (Complexity: 3)
+  - Acceptance: Works
+  - Dependencies: none
+  - Files: src/thing.ts
+  - Tests Required: yes
+`;
+    const task = parseTasksMarkdown(md);
+    expect(task.complexityDimensions).toBeUndefined();
+  });
+
+  test('Complexity Dimensions in heading format', () => {
+    const md = `## [1] Task with dimensions
+- Complexity: 3
+- Complexity Dimensions: scope=1, risk=2, novelty=3, integration=4, testing=5
+- Dependencies: none
+- Files: src/thing.ts
+- Tests Required: yes
+- Acceptance Criteria: Done
+- Hints:
+  - Do it
+`;
+    const task = parseTasksMarkdown(md);
+    expect(task.complexityDimensions).toEqual({
+      scope: 1,
+      risk: 2,
+      novelty: 3,
+      integration: 4,
+      testing: 5,
+    });
+  });
+
+  test('nested tasks: only leaf has dimensions', () => {
+    const md = `- [ID: root] Root (Complexity: 8)
+  - [ID: 1] Parent (Complexity: 6)
+    - [ID: 1.1] Leaf (Complexity: 3)
+      - Complexity Dimensions: scope=2, risk=3, novelty=1, integration=1, testing=2
+      - Acceptance: Done
+      - Dependencies: none
+      - Files: src/a.ts
+      - Tests Required: yes
+`;
+    const task = parseTasksMarkdown(md);
+    const leaf = task.subtasks![0].subtasks![0];
+    expect(leaf.complexityDimensions).toEqual({
+      scope: 2,
+      risk: 3,
+      novelty: 1,
+      integration: 1,
+      testing: 2,
+    });
+    expect(task.complexityDimensions).toBeUndefined();
+    expect(task.subtasks![0].complexityDimensions).toBeUndefined();
+  });
+
   test('handles reference.md example format exactly', () => {
     const md = `# Task Decomposition
 

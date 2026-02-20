@@ -481,6 +481,126 @@ describe('validateTaskTree', () => {
     expect(result.violations).toHaveLength(0);
   });
 
+  test('scattered-files warning for task spanning 3+ directories', () => {
+    const root = makeTask({
+      id: 'root',
+      estimatedComplexity: 8,
+      subtasks: [
+        makeTask({
+          id: '1',
+          metadata: {
+            filesToModify: ['src/a/foo.ts', 'src/b/bar.ts', 'src/c/baz.ts'],
+            testsRequired: true,
+            hints: ['Do the thing'],
+            guardrails: ['Do NOT add new dependencies'],
+          },
+        }),
+      ],
+    });
+
+    const result = validateTaskTree(root, 5);
+    expect(result.valid).toBe(true); // warnings don't affect validity
+    expect(result.warnings).toHaveLength(1);
+    expect(result.warnings[0].type).toBe('scattered-files');
+    expect(result.warnings[0].id).toBe('1');
+    expect(result.warnings[0].detail).toContain('3 directories');
+  });
+
+  test('no scattered-files warning for task with 2 directories', () => {
+    const root = makeTask({
+      id: 'root',
+      estimatedComplexity: 8,
+      subtasks: [
+        makeTask({
+          id: '1',
+          metadata: {
+            filesToModify: ['src/a/foo.ts', 'src/b/bar.ts'],
+            testsRequired: true,
+            hints: ['Do the thing'],
+            guardrails: ['Do NOT add new dependencies'],
+          },
+        }),
+      ],
+    });
+
+    const result = validateTaskTree(root, 5);
+    expect(result.warnings).toHaveLength(0);
+  });
+
+  test('no scattered-files warning for files in same directory', () => {
+    const root = makeTask({
+      id: 'root',
+      estimatedComplexity: 8,
+      subtasks: [
+        makeTask({
+          id: '1',
+          metadata: {
+            filesToModify: ['src/utils/a.ts', 'src/utils/b.ts', 'src/utils/c.ts'],
+            testsRequired: true,
+            hints: ['Do the thing'],
+            guardrails: ['Do NOT add new dependencies'],
+          },
+        }),
+      ],
+    });
+
+    const result = validateTaskTree(root, 5);
+    expect(result.warnings).toHaveLength(0);
+  });
+
+  test('warnings array is always present even when empty', () => {
+    const root = makeTask({
+      id: 'root',
+      estimatedComplexity: 8,
+      subtasks: [
+        makeTask({ id: '1' }),
+      ],
+    });
+
+    const result = validateTaskTree(root, 5);
+    expect(result.warnings).toBeDefined();
+    expect(Array.isArray(result.warnings)).toBe(true);
+  });
+
+  test('dimensionAverages computed when tasks have complexityDimensions', () => {
+    const root = makeTask({
+      id: 'root',
+      estimatedComplexity: 8,
+      subtasks: [
+        makeTask({
+          id: '1',
+          complexityDimensions: { scope: 2, risk: 4, novelty: 3, integration: 1, testing: 2 },
+        }),
+        makeTask({
+          id: '2',
+          complexityDimensions: { scope: 4, risk: 2, novelty: 1, integration: 3, testing: 4 },
+        }),
+      ],
+    });
+
+    const result = validateTaskTree(root, 5);
+    expect(result.stats.dimensionAverages).toBeDefined();
+    expect(result.stats.dimensionAverages!.scope).toBe(3);
+    expect(result.stats.dimensionAverages!.risk).toBe(3);
+    expect(result.stats.dimensionAverages!.novelty).toBe(2);
+    expect(result.stats.dimensionAverages!.integration).toBe(2);
+    expect(result.stats.dimensionAverages!.testing).toBe(3);
+  });
+
+  test('dimensionAverages undefined when no tasks have complexityDimensions', () => {
+    const root = makeTask({
+      id: 'root',
+      estimatedComplexity: 8,
+      subtasks: [
+        makeTask({ id: '1' }),
+        makeTask({ id: '2' }),
+      ],
+    });
+
+    const result = validateTaskTree(root, 5);
+    expect(result.stats.dimensionAverages).toBeUndefined();
+  });
+
   test('leaf with empty filesToModify array and testsRequired=false is valid', () => {
     const root = makeTask({
       id: 'root',

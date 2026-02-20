@@ -190,6 +190,57 @@ describe('Config loading system', () => {
     });
   });
 
+  describe('iterationScaling config', () => {
+    test('defaults to enabled with base=2, factor=0.8', async () => {
+      const config = await loadConfig();
+      expect(config.iterationScaling.enabled).toBe(true);
+      expect(config.iterationScaling.base).toBe(2);
+      expect(config.iterationScaling.factor).toBe(0.8);
+    });
+
+    test('accepts custom values', async () => {
+      const config = await loadConfig({
+        iterationScaling: { enabled: false, base: 1, factor: 1.5 },
+      });
+      expect(config.iterationScaling.enabled).toBe(false);
+      expect(config.iterationScaling.base).toBe(1);
+      expect(config.iterationScaling.factor).toBe(1.5);
+    });
+
+    test('rejects factor > 2', async () => {
+      await expect(loadConfig({
+        iterationScaling: { enabled: true, base: 2, factor: 3 },
+      })).rejects.toThrow();
+    });
+
+    test('rejects base < 1', async () => {
+      await expect(loadConfig({
+        iterationScaling: { enabled: true, base: 0, factor: 0.8 },
+      })).rejects.toThrow();
+    });
+  });
+
+  describe('executionOrder config', () => {
+    test('defaults to document-order', async () => {
+      const config = await loadConfig();
+      expect(config.executionOrder).toBe('document-order');
+    });
+
+    test('accepts risk-first', async () => {
+      const config = await loadConfig({ executionOrder: 'risk-first' });
+      expect(config.executionOrder).toBe('risk-first');
+    });
+
+    test('accepts easy-first', async () => {
+      const config = await loadConfig({ executionOrder: 'easy-first' });
+      expect(config.executionOrder).toBe('easy-first');
+    });
+
+    test('rejects invalid values', async () => {
+      await expect(loadConfig({ executionOrder: 'random' as any })).rejects.toThrow();
+    });
+  });
+
   describe('statusMap.review field', () => {
     test('accepts statusMap with optional review key', async () => {
       const config = await loadConfig({

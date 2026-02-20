@@ -73,7 +73,29 @@ Before writing the final `tasks.md`, walk through your entire tree and check:
 
 This is critical: the orchestrator will validate your output with a deterministic code tool. Leaf tasks above maxComplexity or missing hints will be flagged as violations and you will be re-spawned to fix them. Get it right the first time.
 
-### Complexity Scale Reference
+### Complexity Assessment
+
+For each leaf task, assess complexity across 5 dimensions (1-5 each):
+
+| Dimension | 1 (Low) | 3 (Medium) | 5 (High) |
+|-----------|---------|------------|----------|
+| **Scope** | 1 file, <50 lines | 2-3 files, ~200 lines | 5+ files, 500+ lines |
+| **Risk** | Additive only, no existing behavior affected | Modifies existing logic with tests | Changes shared interfaces or core abstractions |
+| **Novelty** | Following existing pattern exactly | Adapting existing pattern to new context | No precedent in codebase |
+| **Integration** | Self-contained, no other tasks depend on this | 1-2 downstream tasks use output | Hub task: 3+ tasks depend on it |
+| **Testing** | No tests or trivial assertion | Standard unit tests | Integration tests + edge cases + mocking |
+
+The `estimatedComplexity` is `max(scope, risk, novelty, integration, testing)`.
+
+Output format for leaf tasks:
+```
+- [ID: 1.1] Create JWT utility (Complexity: 3)
+  - Complexity Dimensions: scope=2, risk=3, novelty=2, integration=1, testing=3
+  - Acceptance: Signs tokens, Verifies tokens
+  ...
+```
+
+### Complexity Scale Reference (calibration aid)
 
 | Score | Description | Example | Leaf at max=5? | Leaf at max=3? |
 |-------|------------|---------|:-:|:-:|
@@ -84,7 +106,7 @@ This is critical: the orchestrator will validate your output with a deterministi
 | 6-7 | Complex task | Multi-file feature with integration | MUST decompose | MUST decompose |
 | 8-10 | Major task | Architectural change, new subsystem | MUST decompose | MUST decompose |
 
-Note: The default maxComplexity is **3**, meaning tasks rated 4+ must be decomposed unless overridden by `--max-complexity`.
+Note: The default maxComplexity is **3**, meaning tasks rated 4+ must be decomposed unless overridden by `--max-complexity`. The decomposition gate still uses `estimatedComplexity` (the max of dimensions) vs. `maxComplexity`.
 
 ## Output Format
 
@@ -99,6 +121,7 @@ Write to `{planDir}/tasks.md` using this exact format:
 ### Subtasks
 - [ID: 1] First major component (Complexity: N)
   - [ID: 1.1] Sub-component A (Complexity: N)
+    - Complexity Dimensions: scope=N, risk=N, novelty=N, integration=N, testing=N
     - Acceptance: Criterion 1, Criterion 2
     - Dependencies: none
     - Files: src/path/to/file.ts

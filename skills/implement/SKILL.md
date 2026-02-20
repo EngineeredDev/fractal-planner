@@ -423,6 +423,7 @@ If ANY check fails:
 ```
 builderTaskMap = {}        // builderName → planTaskId (current assignment)
 iterationMap = {}          // planTaskId → current iteration number
+iterationMaxMap = {}       // planTaskId → effective max iterations (computed per-task)
 clarificationsUsed = {}    // planTaskId → boolean
 activeBuilders = set()     // builders that haven't sent NO_MORE_TASKS
 idleBuilders = set()       // builders that have sent NO_MORE_TASKS
@@ -474,7 +475,14 @@ If activeBuilders is empty AND commitQueue is empty:
 2. **Check for duplicate claim**: if another builder already has this `planTaskId` in `builderTaskMap` values, send `TASK_ALREADY_CLAIMED: {planTaskId}` back to the sender. Return.
 3. Record: `builderTaskMap[builderName] = planTaskId`
 4. Set `iterationMap[planTaskId] = 1` if not already set. Persist: read `execution-state.json`, set `iterationMap[planTaskId]` to the current value, write back.
-5. Send `TASK_STARTED: {planTaskId}` to tracker. Wait for `ACK_STARTED: {planTaskId}`.
+5. **Compute adaptive max iterations**: If `iterationScaling.enabled` (from config):
+   - Look up the task's complexity from the parsed task tree. Prefer `complexityDimensions.risk` if available, otherwise use `estimatedComplexity`.
+   - `effectiveMax = max(iterationScaling.base, ceil(taskComplexity * iterationScaling.factor))`
+   - `effectiveMax = min(effectiveMax, maxIterations)` — cap at the global maximum
+   - Store in `iterationMaxMap[planTaskId] = effectiveMax`
+
+   If `iterationScaling.enabled` is false: `iterationMaxMap[planTaskId] = maxIterations`
+6. Send `TASK_STARTED: {planTaskId}` to tracker. Wait for `ACK_STARTED: {planTaskId}`.
 
 ### 5.4: Handle IMPLEMENTATION COMPLETE
 
@@ -490,11 +498,11 @@ If activeBuilders is empty AND commitQueue is empty:
 - Send `VERIFICATION PASSED: {planTaskId}` to the builder (builder loops to claim next task)
 
 **If VERIFICATION FAILED:**
-- If `iterationMap[planTaskId] >= maxIterations`: go to Step 5.8.
+- If `iterationMap[planTaskId] >= iterationMaxMap[planTaskId]`: go to Step 5.8.
 - Else: increment `iterationMap[planTaskId]`. Persist: read `execution-state.json`, update `iterationMap[planTaskId]`, write back. Send to builder:
   ```
   VERIFICATION FAILED: {planTaskId}
-  Iteration: {n}/{maxIterations}
+  Iteration: {n}/{iterationMaxMap[planTaskId]}
 
   {full VERIFICATION FAILED output from verifier}
 
@@ -588,11 +596,11 @@ For each entry in `commitQueue`:
 
 ### 5.8: On Max Iterations Reached
 
-Triggered from Step 5.4 when `iterationMap[planTaskId] >= maxIterations` and verification fails.
+Triggered from Step 5.4 when `iterationMap[planTaskId] >= iterationMaxMap[planTaskId]` and verification fails.
 
-1. Log: "Task {planTaskId} FAILED after {maxIterations} iterations"
+1. Log: "Task {planTaskId} FAILED after {iterationMaxMap[planTaskId]} iterations"
 2. Use `AskUserQuestion`:
-   - Question: "Task {planTaskId} failed verification after {maxIterations} iterations. What would you like to do?"
+   - Question: "Task {planTaskId} failed verification after {iterationMaxMap[planTaskId]} iterations. What would you like to do?"
    - Options:
      - **Continue**: Skip this task and proceed
      - **Stop**: End the implementation run and report current progress

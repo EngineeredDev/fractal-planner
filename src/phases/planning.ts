@@ -31,9 +31,12 @@ export async function createImplementationPlan(
 
 /**
  * Get execution order respecting dependencies
- * Returns tasks in topological order
+ * Returns tasks in topological order with optional tiebreak strategy
  */
-export function getExecutionOrder(rootTask: Task): Task[] {
+export function getExecutionOrder(
+  rootTask: Task,
+  tiebreak: 'risk-first' | 'easy-first' | 'document-order' = 'document-order'
+): Task[] {
   const allTasks: Task[] = [];
   const visited = new Set<string>();
 
@@ -69,6 +72,13 @@ export function getExecutionOrder(rootTask: Task): Task[] {
       sorted.push(...remaining);
       break;
     }
+
+    if (tiebreak === 'risk-first') {
+      ready.sort((a, b) => b.estimatedComplexity - a.estimatedComplexity);
+    } else if (tiebreak === 'easy-first') {
+      ready.sort((a, b) => a.estimatedComplexity - b.estimatedComplexity);
+    }
+    // 'document-order': no sort (preserve original traversal order)
 
     sorted.push(...ready);
     ready.forEach(task => {

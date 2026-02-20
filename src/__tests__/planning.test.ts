@@ -103,6 +103,80 @@ describe('getExecutionOrder', () => {
     warnSpy.mockRestore();
   });
 
+  test('risk-first tiebreak: higher complexity first within a wave', () => {
+    const root = makeTask({
+      id: 'root',
+      subtasks: [
+        makeTask({ id: 'a', estimatedComplexity: 2 }),
+        makeTask({ id: 'b', estimatedComplexity: 5 }),
+        makeTask({ id: 'c', estimatedComplexity: 3 }),
+      ],
+    });
+    const order = getExecutionOrder(root, 'risk-first');
+    expect(order.map(t => t.id)).toEqual(['b', 'c', 'a']);
+  });
+
+  test('easy-first tiebreak: lower complexity first within a wave', () => {
+    const root = makeTask({
+      id: 'root',
+      subtasks: [
+        makeTask({ id: 'a', estimatedComplexity: 5 }),
+        makeTask({ id: 'b', estimatedComplexity: 2 }),
+        makeTask({ id: 'c', estimatedComplexity: 3 }),
+      ],
+    });
+    const order = getExecutionOrder(root, 'easy-first');
+    expect(order.map(t => t.id)).toEqual(['b', 'c', 'a']);
+  });
+
+  test('document-order tiebreak: preserves traversal order', () => {
+    const root = makeTask({
+      id: 'root',
+      subtasks: [
+        makeTask({ id: 'a', estimatedComplexity: 5 }),
+        makeTask({ id: 'b', estimatedComplexity: 2 }),
+        makeTask({ id: 'c', estimatedComplexity: 3 }),
+      ],
+    });
+    const order = getExecutionOrder(root, 'document-order');
+    expect(order.map(t => t.id)).toEqual(['a', 'b', 'c']);
+  });
+
+  test('tiebreak only affects tasks within same dependency wave', () => {
+    const root = makeTask({
+      id: 'root',
+      subtasks: [
+        makeTask({ id: 'a', estimatedComplexity: 1, dependencies: [] }),
+        makeTask({ id: 'b', estimatedComplexity: 5, dependencies: [] }),
+        makeTask({ id: 'c', estimatedComplexity: 3, dependencies: ['a'] }),
+        makeTask({ id: 'd', estimatedComplexity: 2, dependencies: ['a'] }),
+      ],
+    });
+    const order = getExecutionOrder(root, 'risk-first');
+    // Wave 1: a(1), b(5) → risk-first: b, a
+    // Wave 2: c(3), d(2) → risk-first: c, d
+    const idxB = order.findIndex(t => t.id === 'b');
+    const idxA = order.findIndex(t => t.id === 'a');
+    const idxC = order.findIndex(t => t.id === 'c');
+    const idxD = order.findIndex(t => t.id === 'd');
+    expect(idxB).toBeLessThan(idxC); // wave 1 before wave 2
+    expect(idxA).toBeLessThan(idxC);
+    expect(idxC).toBeLessThan(idxD); // within wave 2, c(3) before d(2)
+  });
+
+  test('default tiebreak is document-order', () => {
+    const root = makeTask({
+      id: 'root',
+      subtasks: [
+        makeTask({ id: 'a', estimatedComplexity: 5 }),
+        makeTask({ id: 'b', estimatedComplexity: 2 }),
+      ],
+    });
+    const orderDefault = getExecutionOrder(root);
+    const orderExplicit = getExecutionOrder(root, 'document-order');
+    expect(orderDefault.map(t => t.id)).toEqual(orderExplicit.map(t => t.id));
+  });
+
   test('visited set deduplication', () => {
     // Task referenced from multiple paths shouldn't appear twice
     const shared = makeTask({ id: 'shared' });

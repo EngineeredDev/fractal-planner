@@ -510,6 +510,21 @@ Write tasks.md to the plan directory."
 )
 ```
 
+## Step 7.25: Compute Complexity Signals
+
+Run the signals computation using CLI_RUNNER and CLI_DIR from Step 3:
+
+```bash
+${CLI_RUNNER} ${CLI_DIR}/compute-signals.* "${planId}"
+```
+
+This outputs per-task signals. Read `signals.json` from the plan directory.
+
+Compare each leaf task's LLM-assigned complexity against the programmatic composite:
+- If `|llm_score - composite| > 2`: flag as "signal-divergence" and store for inclusion in Step 7.5 validation feedback.
+
+Store any divergences as `signalDivergences` for use in the retry loop.
+
 ## Step 7.5: Validate Task Tree
 
 Run the deterministic task tree validator using CLI_RUNNER and CLI_DIR from Step 3:
@@ -518,7 +533,9 @@ Run the deterministic task tree validator using CLI_RUNNER and CLI_DIR from Step
 ${CLI_RUNNER} ${CLI_DIR}/validate-tasks.* "${planId}" ${maxComplexity}
 ```
 
-This outputs JSON: `{ "valid": true/false, "maxComplexity": N, "totalLeafTasks": N, "violations": [...], "stats": {...} }`
+This outputs JSON: `{ "valid": true/false, "maxComplexity": N, "totalLeafTasks": N, "violations": [...], "warnings": [...], "stats": {...} }`
+
+Parse and store `warnings` from the result. These are non-blocking issues (like `scattered-files`) that should be included as feedback in retry prompts but do NOT make `valid: false`.
 
 **If `valid: true`**: Proceed to Step 8.
 
@@ -552,6 +569,17 @@ Instructions per violation type:
 - [missing-hints]: Add 2-4 implementation steps as a Hints: block. Tell the builder HOW to implement, not just WHAT.
 - [missing-guardrails]: Add a Guardrails: block with at least: "Do NOT modify files outside: {files}" and "Do NOT add new dependencies". Add task-specific constraints from scope exclusions.
 - [subtask-count]: Merge or split children so the parent has 2-5 subtasks.
+
+<if signalDivergences is non-empty, include this section:>
+Signal Divergences (programmatic signals disagree with LLM scores):
+<for each divergence: '- Task {id}: LLM says complexity {N}, but signals suggest {M} (fileScope={a}, coupling={b}, gitRisk={c}, testCoverage={d})'>
+Consider adjusting complexity scores or decomposing further if signals indicate higher actual complexity.
+</if>
+
+<if validation result has warnings, include this section:>
+Warnings (non-blocking — consider addressing):
+<for each warning: '- Task {id} [{type}]: {detail}'>
+</if>
 
 General:
 - Do NOT change tasks that already pass validation

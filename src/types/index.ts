@@ -10,6 +10,13 @@ export interface Task {
   dependencies: string[];
   subtasks?: Task[];
   status?: TaskStatus;
+  complexityDimensions?: {
+    scope: number;        // 1-5: files, modules, integration points
+    risk: number;         // 1-5: likelihood of breaking existing functionality
+    novelty: number;      // 1-5: extending patterns (1) vs. no precedent (5)
+    integration: number;  // 1-5: connections to other tasks/systems
+    testing: number;      // 1-5: test code needed relative to implementation
+  };
   metadata?: {
     filesToModify?: string[];
     testsRequired?: boolean;
@@ -17,6 +24,13 @@ export interface Task {
     references?: string[];
     guardrails?: string[];
     testCommands?: string[];
+    complexitySignals?: {
+      fileScope: number;      // 1-5: based on file count + total lines
+      coupling: number;       // 1-5: fan-in + fan-out of target files
+      gitRisk: number;        // 1-5: churn, author count, bug-fix frequency
+      testCoverage: number;   // 1-5: presence of corresponding test files
+      composite: number;      // weighted average
+    };
   };
 }
 

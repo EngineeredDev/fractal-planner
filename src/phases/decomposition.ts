@@ -7,7 +7,8 @@ export type ViolationType =
   | 'missing-tests-required'
   | 'missing-hints'
   | 'missing-guardrails'
-  | 'subtask-count';
+  | 'subtask-count'
+  | 'scattered-files';
 
 export interface TaskViolation {
   type: ViolationType;
@@ -23,7 +24,12 @@ export interface ValidationResult {
   maxComplexity: number;
   totalLeafTasks: number;
   violations: TaskViolation[];
-  stats: { maxDepth: number; leafComplexityDistribution: Record<number, number> };
+  warnings: TaskViolation[];
+  stats: {
+    maxDepth: number;
+    leafComplexityDistribution: Record<number, number>;
+    dimensionAverages?: Record<string, number>;
+  };
 }
 
 /**
@@ -37,13 +43,24 @@ export interface ValidationResult {
  */
 export function validateTaskTree(root: Task, maxComplexity: number): ValidationResult {
   const violations: TaskViolation[] = [];
+  const warnings: TaskViolation[] = [];
   const distribution: Record<number, number> = {};
+  const dimensionSums: Record<string, number> = {};
+  let dimensionCount = 0;
 
   function walk(task: Task, parentId: string | null, depth: number, isRoot: boolean): void {
     const isLeaf = !task.subtasks || task.subtasks.length === 0;
     if (isLeaf) {
       const c = task.estimatedComplexity;
       distribution[c] = (distribution[c] || 0) + 1;
+
+      if (task.complexityDimensions) {
+        dimensionCount++;
+        for (const [key, val] of Object.entries(task.complexityDimensions)) {
+          dimensionSums[key] = (dimensionSums[key] || 0) + val;
+        }
+      }
+
       if (c > maxComplexity) {
         violations.push({
           type: 'over-complexity',
@@ -104,6 +121,23 @@ export function validateTaskTree(root: Task, maxComplexity: number): ValidationR
           detail: 'leaf task has no guardrails',
         });
       }
+      if (task.metadata?.filesToModify && task.metadata.filesToModify.length > 0) {
+        const dirs = new Set(
+          task.metadata.filesToModify
+            .map(f => f.split('/').slice(0, -1).join('/'))
+            .filter(Boolean)
+        );
+        if (dirs.size >= 3) {
+          warnings.push({
+            type: 'scattered-files',
+            id: task.id,
+            description: task.description,
+            parentId,
+            depth,
+            detail: `modifies files across ${dirs.size} directories — consider splitting`,
+          });
+        }
+      }
     } else {
       if (!isRoot) {
         const count = task.subtasks!.length;
@@ -126,14 +160,22 @@ export function validateTaskTree(root: Task, maxComplexity: number): ValidationR
 
   walk(root, null, 0, true);
 
+  const dimensionAverages = dimensionCount > 0
+    ? Object.fromEntries(
+        Object.entries(dimensionSums).map(([k, v]) => [k, Math.round((v / dimensionCount) * 10) / 10])
+      )
+    : undefined;
+
   return {
     valid: violations.length === 0,
     maxComplexity,
     totalLeafTasks: countLeafTasks(root),
     violations,
+    warnings,
     stats: {
       maxDepth: calculateMaxDepth(root),
       leafComplexityDistribution: distribution,
+      dimensionAverages,
     },
   };
 }

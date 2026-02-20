@@ -68,6 +68,11 @@ For each leaf task, evaluate the following rubric items:
 - **WARN**: Task has guardrails but only generic boilerplate (no file-boundary guardrail)
 - **FAIL**: Task has NO guardrails at all
 
+#### Rubric Item 8: Single Concern per Task
+- **PASS**: All hints describe a single coherent operation
+- **WARN**: Hints describe two related but separable operations (e.g., "add the schema" and "wire up the endpoint")
+- **FAIL**: Hints describe clearly unrelated operations that should be separate tasks
+
 ### 4. Determine Overall Result
 
 - **FAIL**: Any leaf task has a FAIL on any rubric item, OR the requirements coverage check (item 5) is FAIL
@@ -103,6 +108,7 @@ Write to `{planDir}/critique.md`:
 | 4. Missing Dependencies | PASS/WARN/FAIL | [specific finding] |
 | 6. Circular Phrasing | PASS/WARN/FAIL | [specific finding] |
 | 7. Guardrails Presence | PASS/WARN/FAIL | [specific finding] |
+| 8. Single Concern | PASS/WARN/FAIL | [specific finding] |
 
 ## Tasks Fully Passing
 [List IDs of leaf tasks that passed all rubric items — no table needed]

@@ -41,6 +41,12 @@ export const NudgeConfigSchema = z.object({
   maxRetries: z.number().int().min(1).max(10).default(3),
 });
 
+export const IterationScalingConfigSchema = z.object({
+  enabled: z.boolean().default(true),
+  base:    z.number().int().min(1).default(2),
+  factor:  z.number().min(0).max(2).default(0.8),
+});
+
 const FractalPlannerConfigBaseSchema = z.object({
   maxComplexity:    z.number().int().min(1).max(10).default(3),
   maxIterations:    z.number().int().min(1).default(3),
@@ -57,6 +63,8 @@ const FractalPlannerConfigBaseSchema = z.object({
   commentChecker:   CommentCheckerConfigSchema.default({ enabled: true }),
   nudge:            NudgeConfigSchema.default({ enabled: true, maxRetries: 3 }),
   cliRunner:        z.enum(['bun', 'node', 'auto']).default('auto'),
+  iterationScaling: IterationScalingConfigSchema.default({ enabled: true, base: 2, factor: 0.8 }),
+  executionOrder:   z.enum(['risk-first', 'easy-first', 'document-order']).default('document-order'),
 });
 
 export const FractalPlannerConfigSchema = FractalPlannerConfigBaseSchema.refine(
