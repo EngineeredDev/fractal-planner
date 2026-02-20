@@ -11,18 +11,39 @@ import { join } from 'path';
 import type { InterviewDraft, InterviewFindings, IntentType } from '../types/index.js';
 import { getConfig } from '../config.js';
 
-/**
- * Generate a timestamp-based plan ID (YYYYMMDD-HHmmss)
- */
-function generatePlanId(): string {
+const STOP_WORDS = new Set([
+  'a', 'an', 'the', 'to', 'for', 'in', 'of', 'with', 'and', 'or', 'but', 'is', 'it', 'on', 'at', 'by', 'from',
+  'add', 'create', 'implement', 'build', 'make', 'update', 'fix', 'want', 'need', 'please', 'should', 'would',
+  'like', 'can', 'do', 'that', 'this', 'be', 'have', 'has', 'my', 'our', 'i', 'we', 'me', 'new',
+]);
+
+function generateTimestampPlanId(): string {
   const now = new Date();
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
 }
 
-/**
- * Create a new draft file for an interview session
- */
+export function generateSlugPlanId(description: string): string {
+  const words = description
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .split(/[\s-]+/)
+    .filter(w => w.length > 0 && !STOP_WORDS.has(w));
+
+  if (words.length === 0) return generateTimestampPlanId();
+
+  return words.slice(0, 3).join('-').slice(0, 30);
+}
+
+function resolveUniqueId(base: string, plansRoot: string): string {
+  if (!existsSync(join(plansRoot, base))) return base;
+  for (let i = 2; i <= 9; i++) {
+    const candidate = `${base}-${i}`;
+    if (!existsSync(join(plansRoot, candidate))) return candidate;
+  }
+  return generateTimestampPlanId();
+}
+
 export async function createDraft(
   name: string,
   userGoal: string,
@@ -30,13 +51,13 @@ export async function createDraft(
   planId?: string,
   plansDir?: string
 ): Promise<{ draftPath: string; planId: string }> {
-  const resolvedPlanId = planId ?? generatePlanId();
-  const slug = name.toLowerCase().replace(/\s+/g, '-');
   const resolvedPlansDir = plansDir ?? getConfig().plansDir;
-  const planDir = join(process.cwd(), resolvedPlansDir, resolvedPlanId);
+  const plansRoot = join(process.cwd(), resolvedPlansDir);
+  const resolvedPlanId = planId ?? resolveUniqueId(generateSlugPlanId(userGoal), plansRoot);
+  const slug = name.toLowerCase().replace(/\s+/g, '-');
+  const planDir = join(plansRoot, resolvedPlanId);
   const draftPath = join(planDir, `${slug}.json`);
 
-  // Ensure plan subdirectory exists
   if (!existsSync(planDir)) {
     await mkdir(planDir, { recursive: true });
   }

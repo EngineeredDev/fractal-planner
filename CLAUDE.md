@@ -66,7 +66,7 @@ Deterministic TypeScript scripts invoked by the orchestrator via Claude-executed
 
 ### Runtime artifacts
 
-Plans are stored in `.fractal-planner/plans/{planId}/` (gitignored) with files like `interview.md`, `research.md`, `context.md`, `tasks.md`, `plan.md`, `linear-mapping.json`, `progress.md`. Plan IDs are timestamps (`YYYYMMDD-HHmmss`).
+Plans are stored in `.fractal-planner/plans/{planId}/` (gitignored) with files like `interview.md`, `research.md`, `context.md`, `tasks.md`, `plan.md`, `linear-mapping.json`, `progress.md`. Plan IDs are descriptive slugs derived from the user's goal (e.g., `jwt-auth-api`, `dark-mode-toggle`). Collisions append `-2`, `-3`, etc. Timestamp format (`YYYYMMDD-HHmmss`) is used as a fallback when no descriptive words can be extracted.
 
 ### Agent communication protocol
 

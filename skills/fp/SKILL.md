@@ -24,17 +24,28 @@ This is the user's request. All configuration values (maxComplexity, maxIteratio
 
 ## Step 2: Setup
 
-Determine `planId`. The value below is template-substituted and may contain a session ID:
+Generate a descriptive `planId` slug from the user's goal.
 
-`$CLAUDE_SESSION_ID`
+1. Extract 2-4 descriptive words from the goal (`$ARGUMENTS`), ignoring filler words (a, the, to, for, add, create, implement, build, make, update, fix, want, need, please, etc.).
+2. Lowercase, join with hyphens, keep only `[a-z0-9-]`, truncate to 30 characters.
+3. If no descriptive words remain, fall back to a timestamp: `$(date +%Y%m%d-%H%M%S)`.
 
-If that value is empty, is the literal string `$CLAUDE_SESSION_ID`, or contains whitespace, generate a fallback. Run:
+Examples: "Add JWT authentication to API" → `jwt-authentication-api`, "fix dark mode toggle" → `dark-mode-toggle`
+
+Run this to check for collisions and create the directory:
 
 ```bash
-planId="${CLAUDE_SESSION_ID:-}"
-if [ -z "$planId" ] || [ "$planId" = '$CLAUDE_SESSION_ID' ]; then
-  planId="$(date +%Y%m%d-%H%M%S)"
-fi
+planId="<your-slug>"
+base="$planId"
+i=2
+while [ -d ".fractal-planner/plans/${planId}" ]; do
+  planId="${base}-${i}"
+  i=$((i + 1))
+  if [ "$i" -gt 9 ]; then
+    planId="$(date +%Y%m%d-%H%M%S)"
+    break
+  fi
+done
 echo "planId=$planId"
 mkdir -p ".fractal-planner/plans/${planId}"
 ```

@@ -1,8 +1,8 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
-import { mkdtempSync, rmSync } from 'fs';
+import { mkdtempSync, mkdirSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join, relative } from 'path';
-import { createDraft, updateDraft, readDraft } from '../utils/draft';
+import { createDraft, updateDraft, readDraft, generateSlugPlanId } from '../utils/draft';
 import { loadConfig } from '../config';
 import './setup';
 
@@ -41,10 +41,20 @@ describe('draft management', () => {
       expect(planId).toBe('custom-id');
     });
 
-    test('generates timestamp planId when omitted', async () => {
-      const { planId } = await createDraft('Test', 'goal', 'mid-sized', undefined, relPlansDir);
-      // Format: YYYYMMDD-HHmmss
+    test('generates slug planId from userGoal when omitted', async () => {
+      const { planId } = await createDraft('Test', 'add JWT auth to API', 'mid-sized', undefined, relPlansDir);
+      expect(planId).toBe('jwt-auth-api');
+    });
+
+    test('falls back to timestamp when userGoal has only stop words', async () => {
+      const { planId } = await createDraft('Test', 'please add the', 'mid-sized', undefined, relPlansDir);
       expect(planId).toMatch(/^\d{8}-\d{6}$/);
+    });
+
+    test('appends suffix on collision', async () => {
+      mkdirSync(join(tmpDir, 'dark-mode'), { recursive: true });
+      const { planId } = await createDraft('Test', 'fix dark mode', 'mid-sized', undefined, relPlansDir);
+      expect(planId).toBe('dark-mode-2');
     });
 
     test('slugifies name: "My Interview" → "my-interview.json"', async () => {
@@ -116,5 +126,36 @@ describe('draft management', () => {
     test('throws on non-existent file', async () => {
       expect(readDraft('/nonexistent/path/file.json')).rejects.toThrow();
     });
+  });
+});
+
+describe('generateSlugPlanId', () => {
+  test('extracts descriptive words and joins with hyphens', () => {
+    expect(generateSlugPlanId('JWT authentication for API')).toBe('jwt-authentication-api');
+  });
+
+  test('filters stop words', () => {
+    expect(generateSlugPlanId('add a new dark mode toggle')).toBe('dark-mode-toggle');
+  });
+
+  test('takes at most 3 words', () => {
+    expect(generateSlugPlanId('refactor database connection pooling layer')).toBe('refactor-database-connection');
+  });
+
+  test('falls back to timestamp for empty input', () => {
+    expect(generateSlugPlanId('')).toMatch(/^\d{8}-\d{6}$/);
+  });
+
+  test('falls back to timestamp when only stop words', () => {
+    expect(generateSlugPlanId('please add the')).toMatch(/^\d{8}-\d{6}$/);
+  });
+
+  test('strips non-alphanumeric characters', () => {
+    expect(generateSlugPlanId("user's profile page!")).toBe('users-profile-page');
+  });
+
+  test('truncates to 30 characters', () => {
+    const slug = generateSlugPlanId('internationalization localization infrastructure');
+    expect(slug.length).toBeLessThanOrEqual(30);
   });
 });
