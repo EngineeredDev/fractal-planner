@@ -27,7 +27,7 @@ Run a single test file: `bun test src/__tests__/config.test.ts`
 
 ### Skills (Markdown prompts — not compiled TypeScript)
 
-- **`/fp:plan`** (`skills/fp/SKILL.md`) — Thin orchestrator that coordinates each phase: interview (agent team with lead-relay) → research → decomposition → planning → (Linear sync). Uses `resolve-env.sh` to resolve plugin root, CLI runner, CLI directory, and full merged config in a single bash call. Claude derives the plugin root from skill metadata context. CLI helpers (validate-tasks, generate-plan) also run as Claude-executed bash.
+- **`/fp:plan`** (`skills/fp/SKILL.md`) — Thin orchestrator that coordinates each phase: interview (agent team with lead-relay) → research → (approach review) → decomposition → planning → (Linear sync). Uses `resolve-env.sh` to resolve plugin root, CLI runner, CLI directory, and full merged config in a single bash call. Claude derives the plugin root from skill metadata context. CLI helpers (validate-tasks, generate-plan) also run as Claude-executed bash.
 - **`/fp:implement`** (`skills/implement/SKILL.md`) — Loads a plan by `planId`, spawns a persistent tracker teammate + persistent builder teammates (self-claiming work loop) with lead-spawned fresh verification subagents per iteration, executes leaf tasks in dependency order, handles commits, optionally syncs to Linear via the tracker.
 - **`/fp:commit`** (`skills/commit/SKILL.md`) — Git commit with style detection (SEMANTIC/PLAIN/SHORT) and language detection (KOREAN/ENGLISH).
 

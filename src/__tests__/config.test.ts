@@ -152,6 +152,7 @@ describe('Config loading system', () => {
       expect(config.enableAgentTeams).toBe(true); // default
       expect(config.noCommit).toBe(false); // default
       expect(config.plansDir).toBe('.fractal-planner/plans'); // default
+      expect(config.skipApproachReview).toBe(false); // default
       expect(config.permissionMode).toBe('default'); // default
       expect(config.linear.enabled).toBe(false); // default
     });

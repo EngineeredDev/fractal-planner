@@ -87,12 +87,13 @@ From CONFIG_JSON, extract and remember these for all subsequent steps:
 - `researchOnly` (default: false) — if true, stop after Step 6
 - `planOnly` (default: false) — if true, stop after Step 8
 - `skipPlanReview` (default: false) — if true, skip Step 9 plan review gate
+- `skipApproachReview` (default: false) — if true, skip Step 6.5 approach review gate
 - `preAnalysis` (default: true) — if true, run fp-analyst for complex intents (Step 4.7)
 - `noCommit` (default: false) — passed to implement
 - `linear.enabled` (default: false) — controls Step 9/10
 - `linear.teamId`, `linear.projectId`, `linear.userId` — used in Step 10
 
-If CONFIG_JSON contains `"_error"`, use defaults: maxComplexity=3, maxIterations=3, maxParallelTasks=1, all booleans false, linear disabled.
+If CONFIG_JSON contains `"_error"`, use defaults: maxComplexity=3, maxIterations=3, maxParallelTasks=1, all booleans false (skipPlanReview=false, skipApproachReview=false, etc.), linear disabled.
 
 ## Step 4: Classify Intent
 
@@ -489,6 +490,69 @@ Both agents run in parallel. **Wait for both** to complete by calling TaskOutput
 
 **If `researchOnly` (from Step 3) is true**: After both agents complete, read `research.md` and `context.md`, present a summary to the user, and stop.
 
+## Step 6.5: Approach Review Gate
+
+**Skip condition**: If `skipApproachReview` (from Step 3) is `true`, skip directly to Step 7.
+
+This lightweight checkpoint lets the user review the synthesized approach before the expensive decomposition phase begins.
+
+### Synthesize Approach Summary
+
+Read `interview.json` and `research.md` from the plan directory. Synthesize a high-level approach summary covering:
+
+- **Goal**: Restate the core objective from `interview.json` → `userGoal`
+- **Scope**: In-scope items from `scopeInclusions`, out-of-scope from `scopeExclusions`
+- **Technical Approach**: Cross-reference `technicalDecisions` from `interview.json` with findings from `research.md` — note any conflicts or validations
+- **Key Files & Patterns**: Merge `codebaseContext.relevantFiles` and `codebaseContext.existingPatterns` from `interview.json` with file/pattern discoveries from `research.md`
+- **Risk Areas**: Extract risk factors, knowledge gaps, or caveats identified in `research.md`
+- **Test Strategy**: From `codebaseContext.testStrategy` in `interview.json`
+
+### Present to User
+
+Display the approach summary as formatted markdown text, then call `AskUserQuestion`:
+
+- **"Proceed to decomposition"** — continue to Step 7
+- **"Refine the approach"** — enter the refinement loop below
+
+### Refinement Loop
+
+If the user picks "Refine the approach":
+
+1. Ask what they want to change via `AskUserQuestion` (free text — use a single question with descriptive options like "Change scope", "Change technical approach", "Change test strategy", "Something else").
+2. Based on their feedback, read the current `interview.json`, update the relevant fields (e.g., add/remove scope items, modify technical decisions, adjust test strategy), and write the updated `interview.json` back.
+3. Re-synthesize the approach summary from the updated `interview.json` + `research.md`.
+4. Re-present the summary and the same two options ("Proceed to decomposition" / "Refine the approach").
+5. **Safety limit**: After 5 refinement rounds, add a gentle nudge: "You've refined the approach 5 times. Consider proceeding to decomposition — you can still adjust during the plan review (Step 9)." Still allow further refinement if the user insists.
+
+### Write Artifact
+
+Before proceeding to Step 7, write the final approach summary as `approach-summary.md` to the plan directory for traceability. Use this format:
+
+```markdown
+# Approach Summary
+
+## Goal
+<restated goal>
+
+## Scope
+### In Scope
+- <items>
+### Out of Scope
+- <items>
+
+## Technical Approach
+- <decisions, cross-referenced with research>
+
+## Key Files & Patterns
+- <files and patterns>
+
+## Risk Areas
+- <risks from research>
+
+## Test Strategy
+- <test approach>
+```
+
 ## Step 7: Fractal Decomposition (Phase 2)
 
 Read research.md and context.md, then spawn the decomposer agent:
@@ -778,7 +842,8 @@ If `planOnly` (from Step 3) is true, note that execution was skipped per config.
 ## Important
 
 - **ALWAYS** use configuration from Step 3 (pre-injected at skill load time) — config values control complexity thresholds, flow gates, and Linear integration
-- **ALWAYS** run phases in order: interview -> research+context (parallel) -> decomposition -> (critique) -> planning -> (confirmation gate) -> (linear) -> present results
+- **ALWAYS** run phases in order: interview -> research+context (parallel) -> (approach review) -> decomposition -> (critique) -> planning -> (confirmation gate) -> (linear) -> present results
+- Approach review gate (Step 6.5) fires unless `skipApproachReview === true` — reviews high-level approach before expensive decomposition; distinct from Step 9 which reviews the final task tree
 - **NEVER** skip the interview — even for trivial tasks
 - Pass data between phases via the plan directory files
 - Each agent writes its own artifacts — do not write their files for them

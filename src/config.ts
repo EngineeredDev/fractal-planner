@@ -54,6 +54,7 @@ const FractalPlannerConfigBaseSchema = z.object({
   researchOnly:     z.boolean().default(false),
   planOnly:         z.boolean().default(false),
   skipPlanReview:   z.boolean().default(false),
+  skipApproachReview: z.boolean().default(false),
   preAnalysis:      z.boolean().default(true),
   enableAgentTeams: z.boolean().default(true),
   noCommit:         z.boolean().default(false),

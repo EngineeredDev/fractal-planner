@@ -98,6 +98,7 @@ All fields are optional. Only include values you want to override:
 | `researchOnly` | `boolean` | `false` | Stop after the research phase |
 | `planOnly` | `boolean` | `false` | Stop after planning, skip execution |
 | `skipPlanReview` | `boolean` | `false` | Skip user review of the generated plan |
+| `skipApproachReview` | `boolean` | `false` | Skip pre-decomposition approach review |
 | `preAnalysis` | `boolean` | `true` | Run pre-analysis before interview |
 | `noCommit` | `boolean` | `false` | Skip automatic git commits after task completion |
 | `plansDir` | `string` | `".fractal-planner/plans"` | Directory for plan artifacts |
