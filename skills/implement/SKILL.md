@@ -43,6 +43,8 @@ If either file does not exist, report the error and stop:
   - `taskMap` — object mapping plan task IDs to native task IDs (e.g., `{ "T1.1": "1", "T2.1": "2" }`)
   - `skippedTasks` — object mapping plan task IDs to skip reasons
   - `failureReasons` — object mapping plan task IDs to failure reasons
+  - `iterationMap` — object mapping plan task IDs to iteration numbers (default `{}` if absent)
+  - `clarificationsUsed` — object mapping plan task IDs to booleans (default `{}` if absent)
   - `maxIterations`, `noCommit` — override command-line defaults if present
 - **If no**: Set `executionState = null`, `isResume = false`.
 
@@ -113,7 +115,9 @@ Write .fractal-planner/plans/{planId}/execution-state.json:
   "noCommit": noCommit,
   "createdAt": "{ISO timestamp}",
   "skippedTasks": {},
-  "failureReasons": {}
+  "failureReasons": {},
+  "iterationMap": {},
+  "clarificationsUsed": {}
 }
 ```
 
@@ -161,6 +165,10 @@ If `isResume == true`:
    - Remaining: {N}
    Continuing from where the previous session left off.
    ```
+7. Check for `.fractal-planner/plans/{planId}/handoff.md`. If found:
+   - Read the "## Key Discoveries" section → store as `handoffDiscoveries`
+   - Read the "## Resume Notes" section → display to user
+   - Log: "Handoff context loaded from previous session"
 
 If `isResume == false`:
 - Initialize empty sets: `completedTasks = {}`, `failedTasks = {}`, `skippedTasks = {}`
@@ -230,11 +238,16 @@ Builders are **persistent teammates** that run a self-claiming work loop across 
 Name: **builder-{N}** (where N = 1 to `maxParallelTasks`)
 Tools: `Read`, `Write`, `Edit`, `Bash`, `Glob`, `Grep`, `TaskList`, `TaskUpdate`, `TaskGet`, `SendMessage`
 
-Instructions for builder (inject `{builderName}`, `{codebaseContext}`, `{planId}`, `{peerBuilderNames}`):
+Instructions for builder (inject `{builderName}`, `{codebaseContext}`, `{planId}`, `{peerBuilderNames}`, `{handoffDiscoveries}`):
 ```
 You are {builderName}, a persistent builder agent on the fp-impl-{planId} team.
 
 {codebaseContext}
+
+{if handoffDiscoveries is non-empty:}
+PREVIOUS SESSION DISCOVERIES (from handoff):
+{handoffDiscoveries content}
+{end if}
 
 Your peer builders: {peerBuilderNames}
 
@@ -415,6 +428,10 @@ activeBuilders = set()     // builders that haven't sent NO_MORE_TASKS
 idleBuilders = set()       // builders that have sent NO_MORE_TASKS
 commitQueue = []           // ordered list of {planTaskId, filesModified, builderName, iteration, nativeId}
 completedTasks, failedTasks, skippedTasks (from Step 4.1 or empty for fresh runs)
+
+If isResume == true:
+  iterationMap = executionState.iterationMap || {}
+  clarificationsUsed = executionState.clarificationsUsed || {}
 ```
 
 Read `notepad.md` from the plan directory. Set `notepadContents` to the file contents, or empty string if not found.
@@ -456,7 +473,7 @@ If activeBuilders is empty AND commitQueue is empty:
 1. Parse `planTaskId`, `builderName`, `nativeId` from the message.
 2. **Check for duplicate claim**: if another builder already has this `planTaskId` in `builderTaskMap` values, send `TASK_ALREADY_CLAIMED: {planTaskId}` back to the sender. Return.
 3. Record: `builderTaskMap[builderName] = planTaskId`
-4. Set `iterationMap[planTaskId] = 1` if not already set.
+4. Set `iterationMap[planTaskId] = 1` if not already set. Persist: read `execution-state.json`, set `iterationMap[planTaskId]` to the current value, write back.
 5. Send `TASK_STARTED: {planTaskId}` to tracker. Wait for `ACK_STARTED: {planTaskId}`.
 
 ### 5.4: Handle IMPLEMENTATION COMPLETE
@@ -474,7 +491,7 @@ If activeBuilders is empty AND commitQueue is empty:
 
 **If VERIFICATION FAILED:**
 - If `iterationMap[planTaskId] >= maxIterations`: go to Step 5.8.
-- Else: increment `iterationMap[planTaskId]`, send to builder:
+- Else: increment `iterationMap[planTaskId]`. Persist: read `execution-state.json`, update `iterationMap[planTaskId]`, write back. Send to builder:
   ```
   VERIFICATION FAILED: {planTaskId}
   Iteration: {n}/{maxIterations}
@@ -497,7 +514,7 @@ If activeBuilders is empty AND commitQueue is empty:
    User selected: "{option}"
    Context: {additional text if any}
    ```
-5. Mark `clarificationsUsed[planTaskId] = true`.
+5. Mark `clarificationsUsed[planTaskId] = true`. Persist: read `execution-state.json`, set `clarificationsUsed[planTaskId] = true`, write back.
 
 ### 5.6: Handle NO_MORE_TASKS
 
