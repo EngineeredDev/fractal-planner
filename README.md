@@ -1,26 +1,32 @@
 # Fractal Planner
 
-A Claude Code plugin that provides an iterative planning and execution framework. It breaks down complex features into progressively smaller tasks (like a fractal) until each task is manageable for an LLM, then uses builder/verifier agent teams for robust implementation.
+A Claude Code plugin that turns a one-line goal into a structured plan and then builds it for you — with built-in verification at every step.
 
-## Features
+You describe what you want, Fractal Planner interviews you to fill in the gaps, researches your codebase, breaks the work into small tasks, and hands them off to builder agents that implement and verify each piece. You stay in the loop at the decisions that matter and skip the ones that don't.
 
-- **Requirements Interview** — Interactive clarification loop with 6-item clearance checklist and intent-specific question strategies
-- **Codebase Research** — Analyzes your codebase, identifies patterns and knowledge gaps
-- **Fractal Decomposition** — Recursively breaks tasks into smaller pieces with complexity scoring
-- **Detailed Planning** — Implementation plans with strict acceptance criteria and dependency ordering
-- **Builder/Verifier Teams** — Self-claiming builder agents with lead-spawned fresh verification subagents per iteration
-- **Linear Integration** — Optional sync to Linear for issue tracking and status updates
+The key here is that plans are broken down into bite size "fractal" tasks to ensure each step is implemented correctly without context rot.
 
-## Installation
+## Installation & Requirements
 
-### From Marketplace
+Install from the Claude Code plugin marketplace:
 
 ```
 /plugin marketplace add EngineeredDev/fractal-planner
 /plugin install fractal-planner@fractal-planner
 ```
 
-### For Development
+Enable Agent Teams in your Claude Code settings (`~/.claude/settings.json` or project `.claude/settings.json`):
+
+```json
+{
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  }
+}
+```
+
+<details>
+<summary>Installing from source (for development)</summary>
 
 ```bash
 git clone https://github.com/EngineeredDev/fractal-planner.git
@@ -35,40 +41,50 @@ Test in another project:
 claude --plugin-dir /path/to/fractal-planner
 ```
 
-## Requirements
+</details>
 
-- Claude Code with plugin support
-- Agent Teams enabled — add to your Claude Code settings (`~/.claude/settings.json` or project `.claude/settings.json`):
-  ```json
-  {
-    "env": {
-      "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
-    }
-  }
-  ```
+## Workflow
 
-## Skills
+### 1. Start a plan
 
-| Skill | Description |
-|-------|-------------|
-| `/fp:plan <goal>` | Iterative planning: interview, research, decomposition, planning, and optional Linear sync |
-| `/fp:implement <planId>` | Execute a plan using persistent builder agents with lead-spawned verification subagents |
-| `/fp:commit` | Git commit with style detection (SEMANTIC/PLAIN/SHORT) and language detection (KOREAN/ENGLISH) |
-| `/fp:retry <planId> <taskId>` | Retry a single failed task with a fresh builder/verifier cycle |
-| `/fp:status <planId>` | Read-only progress report with progress bar, per-task status table, and evidence links |
-| `/fp:handoff <planId>` | Generate a session handoff summary for clean context continuation |
-
-### Example
+Tell Fractal Planner what you want to build:
 
 ```
 /fp:plan Add user authentication with JWT tokens and refresh token rotation
 ```
 
-After planning completes, implement the generated plan:
+### 2. Answer a few questions
+
+You'll get a short interview — usually 2–4 rounds of questions about scope, constraints, and technical preferences. Answer what you can; skip what you don't have opinions on. The plugin uses your answers to tailor the plan to your project.
+
+### 3. Review the approach
+
+After researching your codebase, Fractal Planner shows you a proposed approach before doing any detailed planning. You can approve it, adjust it, or ask for a different direction.
+
+### 4. Get a plan
+
+The plugin breaks your goal into small, ordered tasks — each with acceptance criteria, file targets, and dependencies. You'll see the full plan and can approve or edit it before anything gets built.
+
+### 5. Implement
+
+Once you're happy with the plan, kick off implementation:
 
 ```
-/fp:implement 20260220-143000
+/fp:implement jwt-auth-api
 ```
+
+Builder agents work through the tasks in order. Each task goes through an implement → verify cycle: a builder writes the code, then a separate verifier checks it against the acceptance criteria. You'll see commits land as tasks complete.
+
+### Other commands
+
+You won't normally need these, but they can sometimes come in handy.
+
+| Command | What it does |
+|---------|--------------|
+| `/fp:commit` | Smart git commit — detects your project's commit style and language |
+| `/fp:retry <planId> <taskId>` | Re-run a single failed task |
+| `/fp:status <planId>` | Check progress on a running or completed plan |
+| `/fp:handoff <planId>` | Generate a summary for continuing work in a new session |
 
 ## Configuration
 
@@ -134,8 +150,6 @@ A PostToolUse hook that warns when Claude adds unnecessary comments to code. Use
 }
 ```
 
-Env var overrides: `COMMENT_CHECKER_DISABLED=1`, `COMMENT_CHECKER_PATH`, `COMMENT_CHECKER_PROMPT`.
-
 ### Nudge Mechanism
 
 A TeammateIdle hook that detects stalled builder agents during `/fp:implement` and re-injects continuation prompts.
@@ -148,8 +162,6 @@ A TeammateIdle hook that detects stalled builder agents during `/fp:implement` a
   }
 }
 ```
-
-Disable via env var: `NUDGE_DISABLED=1`.
 
 ### Linear Integration
 

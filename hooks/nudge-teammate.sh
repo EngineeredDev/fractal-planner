@@ -29,35 +29,22 @@ else
   exit 0
 fi
 
-# --- Check env var override ---
-if [[ "${NUDGE_DISABLED:-}" == "1" ]]; then
-  exit 0
-fi
-
-# --- Read config ---
-CONFIG_FILE="${CWD:-.}/.fractal-planner/config.json"
-NUDGE_ENABLED="true"
-MAX_RETRIES=3
-
-if [[ -f "$CONFIG_FILE" ]]; then
-  NUDGE_ENABLED=$(python3 -c "
-import json,sys
-try:
-  c=json.load(open('$CONFIG_FILE'))
-  v=c.get('nudge',{}).get('enabled',True)
-  print(str(v).lower())
-except: print('true')
-" 2>/dev/null || echo "true")
-
-  MAX_RETRIES=$(python3 -c "
-import json,sys
-try:
-  c=json.load(open('$CONFIG_FILE'))
-  v=c.get('nudge',{}).get('maxRetries',3)
-  print(int(v))
-except: print('3')
-" 2>/dev/null || echo "3")
-fi
+# --- Read merged config (user + project, matching TypeScript loadConfig merge order) ---
+NUDGE_CFG=$(python3 << PYEOF
+import json, os
+def rj(p):
+    try:
+        with open(p) as f: return json.load(f)
+    except: return {}
+xdg = os.environ.get('XDG_CONFIG_HOME', os.path.join(os.path.expanduser('~'), '.config'))
+cwd = "${CWD:-.}"
+m = {**rj(os.path.join(xdg, 'fractal-planner', 'config.json')),
+     **rj(os.path.join(cwd, '.fractal-planner', 'config.json'))}
+n = m.get('nudge', {})
+print(f"{str(n.get('enabled', True)).lower()}|{n.get('maxRetries', 3)}")
+PYEOF
+) || NUDGE_CFG="true|3"
+IFS='|' read -r NUDGE_ENABLED MAX_RETRIES <<< "$NUDGE_CFG"
 
 if [[ "$NUDGE_ENABLED" == "false" ]]; then
   exit 0

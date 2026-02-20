@@ -772,4 +772,4 @@ See [reference.md](./reference.md) for:
 - **Verification is lead-driven**: The lead spawns a fresh verification subagent (via Task tool) after each builder iteration. No hooks or persistent verifier teammate.
 - **User decides on failure**: When max iterations are reached, always ask the user.
 - **progress.md is generated once at Step 6**: Not a runtime artifact. Generated as a human-readable snapshot at the end.
-- **Nudge mechanism**: A TeammateIdle hook (`hooks/nudge-builder.sh`) detects when builders stall (go idle while owning an in_progress task) and re-injects a continuation prompt. After `nudge.maxRetries` (default: 3) re-injections with no progress, the hook stops. Configurable via `.fractal-planner/config.json` `nudge` section. Env var: `NUDGE_DISABLED=1`.
+- **Nudge mechanism**: A TeammateIdle hook (`hooks/nudge-teammate.sh`) detects when builders stall (go idle while owning an in_progress task) and re-injects a continuation prompt. After `nudge.maxRetries` (default: 3) re-injections with no progress, the hook stops. Configurable via `.fractal-planner/config.json` `nudge` section.

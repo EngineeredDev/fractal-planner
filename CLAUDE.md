@@ -153,8 +153,6 @@ Configure via `.fractal-planner/config.json`:
 }
 ```
 
-Or via env vars (take priority): `COMMENT_CHECKER_DISABLED=1`, `COMMENT_CHECKER_PATH`, `COMMENT_CHECKER_PROMPT`.
-
 ## Nudge Mechanism (TeammateIdle Hook)
 
 A TeammateIdle hook (`hooks/nudge-teammate.sh`) that detects stalled teammates and re-injects
@@ -181,4 +179,3 @@ Configure via `.fractal-planner/config.json`:
 }
 ```
 
-Or disable via env var: `NUDGE_DISABLED=1`.

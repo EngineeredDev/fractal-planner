@@ -917,4 +917,3 @@ Lifecycle:
 { "nudge": { "enabled": true, "maxRetries": 3 } }
 ```
 
-Env override: `NUDGE_DISABLED=1`

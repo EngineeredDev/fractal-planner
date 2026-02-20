@@ -7,53 +7,31 @@ set -euo pipefail
 #
 # Exit 0 always — hooks must never block Claude Code.
 
-# --- Read config from .fractal-planner/config.json via python3 one-liner ---
-CONFIG_FILE=".fractal-planner/config.json"
-CFG_ENABLED=""
-CFG_BINARY_PATH=""
-CFG_CUSTOM_PROMPT=""
+# --- Read merged config (user + project, matching TypeScript loadConfig merge order) ---
+eval "$(python3 << 'PYEOF'
+import json, os, shlex
+def rj(p):
+    try:
+        with open(p) as f: return json.load(f)
+    except: return {}
+xdg = os.environ.get('XDG_CONFIG_HOME', os.path.join(os.path.expanduser('~'), '.config'))
+m = {**rj(os.path.join(xdg, 'fractal-planner', 'config.json')), **rj('.fractal-planner/config.json')}
+cc = m.get('commentChecker', {})
+print(f"CFG_ENABLED={shlex.quote(str(cc.get('enabled', True)).lower())}")
+print(f"CFG_BINARY_PATH={shlex.quote(cc.get('binaryPath', ''))}")
+print(f"CFG_CUSTOM_PROMPT={shlex.quote(cc.get('customPrompt', ''))}")
+PYEOF
+)" || { CFG_ENABLED="true"; CFG_BINARY_PATH=""; CFG_CUSTOM_PROMPT=""; }
 
-if [[ -f "$CONFIG_FILE" ]]; then
-  CFG_ENABLED=$(python3 -c "
-import json,sys
-try:
-  c=json.load(open('$CONFIG_FILE'))
-  v=c.get('commentChecker',{}).get('enabled',True)
-  print(str(v).lower())
-except: print('true')
-" 2>/dev/null || echo "true")
-
-  CFG_BINARY_PATH=$(python3 -c "
-import json,sys
-try:
-  c=json.load(open('$CONFIG_FILE'))
-  print(c.get('commentChecker',{}).get('binaryPath',''))
-except: print('')
-" 2>/dev/null || echo "")
-
-  CFG_CUSTOM_PROMPT=$(python3 -c "
-import json,sys
-try:
-  c=json.load(open('$CONFIG_FILE'))
-  print(c.get('commentChecker',{}).get('customPrompt',''))
-except: print('')
-" 2>/dev/null || echo "")
-fi
-
-# --- Check disabled (env var overrides config) ---
-if [[ "${COMMENT_CHECKER_DISABLED:-}" == "1" ]]; then
-  exit 0
-fi
+# --- Check disabled ---
 if [[ "$CFG_ENABLED" == "false" ]]; then
   exit 0
 fi
 
-# --- Locate binary (env > config > node_modules > PATH > cache dirs) ---
+# --- Locate binary (config > node_modules > PATH > cache dirs) ---
 BINARY=""
 
-if [[ -n "${COMMENT_CHECKER_PATH:-}" ]] && [[ -x "${COMMENT_CHECKER_PATH}" ]]; then
-  BINARY="$COMMENT_CHECKER_PATH"
-elif [[ -n "$CFG_BINARY_PATH" ]] && [[ -x "$CFG_BINARY_PATH" ]]; then
+if [[ -n "$CFG_BINARY_PATH" ]] && [[ -x "$CFG_BINARY_PATH" ]]; then
   BINARY="$CFG_BINARY_PATH"
 else
   # Resolve plugin root (directory containing hooks/)
@@ -80,8 +58,8 @@ if [[ -z "$BINARY" ]]; then
   exit 0
 fi
 
-# --- Determine custom prompt (env overrides config) ---
-CUSTOM_PROMPT="${COMMENT_CHECKER_PROMPT:-$CFG_CUSTOM_PROMPT}"
+# --- Determine custom prompt ---
+CUSTOM_PROMPT="$CFG_CUSTOM_PROMPT"
 
 # --- Read stdin (PostToolUse hook input) ---
 INPUT=$(cat)
