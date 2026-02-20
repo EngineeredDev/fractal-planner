@@ -3,14 +3,17 @@
   "version": "0.1.0",
   "description": "Iterative planning and execution framework for Claude Code with fractal task decomposition and builder/verifier agent teams",
   "license": "MIT",
-  "author": "Your Name <your.email@example.com>",
+  "author": "EngineeredDev",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
     "dist",
+    "!dist/src/__tests__",
+    "!dist/**/*.d.ts.map",
     "skills",
     "hooks",
+    "agents",
     ".claude-plugin"
   ],
   "keywords": [
@@ -24,10 +27,10 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/yourusername/fractal-planner.git"
+    "url": "https://github.com/EngineeredDev/fractal-planner.git"
   },
   "scripts": {
-    "build": "bun build ./src/index.ts --outdir dist --target node --format esm && bun build ./src/cli/classify-intent.ts ./src/cli/generate-plan.ts ./src/cli/validate-tasks.ts ./src/cli/load-config.ts --outdir dist/cli --target node --format esm && tsc --emitDeclarationOnly",
+    "build": "bun build ./src/index.ts --outdir dist --target node --format esm && bun build ./src/cli/classify-intent.ts ./src/cli/generate-plan.ts ./src/cli/validate-tasks.ts ./src/cli/load-config.ts ./src/cli/compute-signals.ts --outdir dist/cli --target node --format esm && tsc --emitDeclarationOnly",
     "dev": "tsc --watch",
     "clean": "rm -rf dist && find src skills -type f \\( -name '*.js' -o -name '*.d.ts' -o -name '*.js.map' -o -name '*.d.ts.map' \\) -delete",
     "lint": "oxlint",
