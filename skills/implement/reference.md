@@ -225,7 +225,7 @@ Builders are persistent teammates that run a self-claiming work loop. Instead of
 
 ### Builder Naming Convention
 
-Builders are named `builder-1` through `builder-N` (where N = `maxParallelTasks`). The builder name matches the `owner` value set in native task JSON — this is critical for P3 forward-compatibility where the TeammateIdle hook reads `owner` from task files.
+Builders are named `builder-1` through `builder-N` (where N = `maxParallelTasks`). The builder name matches the `owner` value set in native task JSON — this is critical for the nudge mechanism (P3) where the TeammateIdle hook reads `owner` from task files.
 
 ### Claiming Rules
 
@@ -708,3 +708,44 @@ MULTI_SELECT: false
 - 1 clarification maximum per task, iteration 1 only
 - Subsequent iterations: lead rejects with "Proceed with failure report and task spec only"
 - In parallel mode: clarification requests are processed one at a time (AskUserQuestion is sequential)
+
+---
+
+## Nudge Mechanism (P3)
+
+### Overview
+
+A `TeammateIdle` hook that detects stalled builders and re-injects continuation prompts.
+Prevents builders from going permanently idle while still owning in-progress tasks.
+
+### Hook Behavior
+
+| Teammate | Hook behavior |
+|----------|---------------|
+| `builder-*` on `fp-impl-*` | Active -- scans tasks, may re-inject |
+| `tracker` | Filtered out |
+| `committer-*` | Filtered out |
+| Non-fp-impl teams | Filtered out |
+
+### State File
+
+Location: `~/.claude/teams/{team_name}/nudge-{teammate_name}.json`
+
+```json
+{ "retries": 1, "lastRetryAt": "2026-02-20T12:00:00Z", "taskId": "5" }
+```
+
+Lifecycle:
+- Created on first stall detection for a task
+- Retries increment on subsequent stalls for the same task
+- **Reset** when builder moves to a different task (taskId mismatch)
+- **Deleted** when builder has no in_progress tasks (legitimate idle)
+- **Deleted** when retries >= maxRetries (give up)
+
+### Configuration
+
+```json
+{ "nudge": { "enabled": true, "maxRetries": 3 } }
+```
+
+Env override: `NUDGE_DISABLED=1`

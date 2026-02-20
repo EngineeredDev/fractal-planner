@@ -36,6 +36,11 @@ export const CommentCheckerConfigSchema = z.object({
   customPrompt: z.string().optional(),
 });
 
+export const NudgeConfigSchema = z.object({
+  enabled:    z.boolean().default(true),
+  maxRetries: z.number().int().min(1).max(10).default(3),
+});
+
 const FractalPlannerConfigBaseSchema = z.object({
   maxComplexity:    z.number().int().min(1).max(10).default(3),
   maxIterations:    z.number().int().min(1).default(3),
@@ -50,6 +55,7 @@ const FractalPlannerConfigBaseSchema = z.object({
   permissionMode:   PermissionModeSchema.default('default'),
   linear:           LinearConfigSchema.default({ enabled: false }),
   commentChecker:   CommentCheckerConfigSchema.default({ enabled: true }),
+  nudge:            NudgeConfigSchema.default({ enabled: true, maxRetries: 3 }),
   cliRunner:        z.enum(['bun', 'node', 'auto']).default('auto'),
 });
 

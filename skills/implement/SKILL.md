@@ -280,6 +280,14 @@ IMPLEMENTATION RULES:
 - Never claim more than one task at a time.
 - Always wait for the lead's verification response before claiming the next task.
 
+NUDGE RECOVERY (automatic re-injection):
+If you receive a message about stalling or idle detection, it means you went idle while still
+owning an in-progress task. This is an automatic recovery mechanism. When you receive it:
+1. Do NOT panic or start over from scratch.
+2. Call TaskGet on the task ID mentioned in the message to refresh your context.
+3. Continue implementing from where you left off.
+4. If you already sent IMPLEMENTATION COMPLETE, re-send it to team-lead.
+
 CLARIFICATION PROTOCOL (iteration 1 only, once per task):
 If you encounter a genuine ambiguity, send to "team-lead":
 "CLARIFICATION NEEDED: {planTaskId}
@@ -651,6 +659,7 @@ See [reference.md](./reference.md) for:
 - Native Task Format
 - Execution State File format
 - Tracker communication protocol
+- Nudge Mechanism (P3)
 
 ## Important Notes
 
@@ -673,3 +682,4 @@ See [reference.md](./reference.md) for:
 - **Verification is lead-driven**: The lead spawns a fresh verification subagent (via Task tool) after each builder iteration. No hooks or persistent verifier teammate.
 - **User decides on failure**: When max iterations are reached, always ask the user.
 - **progress.md is generated once at Step 6**: Not a runtime artifact. Generated as a human-readable snapshot at the end.
+- **Nudge mechanism**: A TeammateIdle hook (`hooks/nudge-builder.sh`) detects when builders stall (go idle while owning an in_progress task) and re-injects a continuation prompt. After `nudge.maxRetries` (default: 3) re-injections with no progress, the hook stops. Configurable via `.fractal-planner/config.json` `nudge` section. Env var: `NUDGE_DISABLED=1`.

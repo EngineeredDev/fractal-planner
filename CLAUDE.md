@@ -153,3 +153,26 @@ Configure via `.fractal-planner/config.json`:
 ```
 
 Or via env vars (take priority): `COMMENT_CHECKER_DISABLED=1`, `COMMENT_CHECKER_PATH`, `COMMENT_CHECKER_PROMPT`.
+
+## Nudge Mechanism (TeammateIdle Hook)
+
+A TeammateIdle hook (`hooks/nudge-builder.sh`) that detects when builder teammates stall
+during `fp:implement` sessions and re-injects continuation prompts. Fires for all teammates;
+the script filters to only `builder-*` on `fp-impl-*` teams.
+
+Reads native task files from `~/.claude/tasks/{team_name}/` to find in_progress tasks owned
+by the idle builder. If found, increments a retry counter and exits 2 with a task-specific
+continuation prompt. After `maxRetries` (default 3), gives up.
+
+Configure via `.fractal-planner/config.json`:
+
+```json
+{
+  "nudge": {
+    "enabled": true,
+    "maxRetries": 3
+  }
+}
+```
+
+Or disable via env var: `NUDGE_DISABLED=1`.

@@ -11,6 +11,17 @@
           }
         ]
       }
+    ],
+    "TeammateIdle": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/nudge-builder.sh",
+            "timeout": 15
+          }
+        ]
+      }
     ]
   }
 }
