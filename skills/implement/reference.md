@@ -360,6 +360,7 @@ Builder ──TASK_CLAIMED: {id}──> Team-Lead
 Team-Lead ──TASK_STARTED: {id}──> Tracker
 Tracker ──ACK_STARTED: {id}──> Team-Lead
 Builder implements → IMPLEMENTATION COMPLETE: {id} with FILES_MODIFIED
+(Parallel mode: builder may SendMessage peer notifications to other builders — max 2 per task)
 Team-Lead spawns Verifier subagent (Task tool):
   Reads modified files, runs tests, checks criteria
   Returns VERIFICATION PASSED or VERIFICATION FAILED
@@ -572,7 +573,7 @@ A single `builder-1` runs the self-claiming loop. Behavior is equivalent to the 
 
 ### Parallel Mode (maxParallelTasks > 1)
 
-N builders (`builder-1` through `builder-N`) claim tasks independently. The native `blockedBy` system ensures dependency ordering — builders can only see tasks whose dependencies are all completed. Multiple builders may work on independent tasks simultaneously.
+N builders (`builder-1` through `builder-N`) claim tasks independently. The native `blockedBy` system ensures dependency ordering — builders can only see tasks whose dependencies are all completed. Multiple builders may work on independent tasks simultaneously. Builders may also send up to 2 peer notifications per task to coordinate shared interfaces and flag conflicts (see Peer Communication Protocol).
 
 ### Race Condition Handling
 
@@ -648,6 +649,72 @@ Started: {ISO timestamp}
 Builders read `notepad.md` themselves as part of the self-claiming loop (Step 4.4, loop step 6). The relevance filter:
 - Include an entry if: it's in the **last 10 entries** overall, OR the task that wrote it had overlapping `filesToModify` with the current task
 - Cap at 10 entries per task to limit context growth
+
+---
+
+## Peer Communication Protocol
+
+### Overview
+
+When `maxParallelTasks > 1`, builders can send direct messages to peer builders via `SendMessage`. This enables real-time coordination during parallel work — sharing new interfaces, flagging conflicts, and propagating discoveries without waiting for the notepad cycle (which only propagates after commit).
+
+Peer messages are **informational and one-way**. Builders do not wait for responses. The lead sees peer DM summaries in idle notifications automatically (built into agent teams framework).
+
+In sequential mode (`maxParallelTasks = 1`), peer communication is disabled (`peerBuilderNames = "none"`).
+
+### Message Format
+
+```
+PEER_NOTIFICATION
+TYPE: {notification_type}
+DETAILS:
+  {1-3 lines describing what happened and what the peer should do}
+```
+
+Sent via: `SendMessage(type: "message", recipient: "{peer-builder-name}", content: "...", summary: "...")`
+
+### Notification Types
+
+| Type | When to Send | Example |
+|------|-------------|---------|
+| `INTERFACE_CREATED` | Created a new export/type/utility that a peer's task could consume | `Created validateInput(s: string): boolean at src/utils/validate.ts:10. Use this instead of inline validation.` |
+| `PATTERN_FOUND` | Discovered a codebase convention or library quirk affecting a peer's work area | `This codebase uses zod v4 parse() not safeParse(). Your task touches the same validation layer.` |
+| `CONFLICT_WARNING` | Detected overlapping file modifications or incompatible interface assumptions | `I'm modifying src/config.ts exports — your task also imports from it. I renamed loadConfig to loadConfigAsync.` |
+| `FILE_MOVED` | Moved or renamed a file that a peer's task references | `Moved src/utils/helpers.ts to src/utils/string-helpers.ts. Your task references the old path.` |
+
+### Budget Rules
+
+- **2 messages max per task** — counter resets when claiming a new task
+- Send to the **specific peer(s) affected**, not broadcast to all peers
+- If unsure whether a peer is affected, don't send — false positives waste turns
+- Each message consumes one tool call (one builder turn), so budget is self-limiting
+
+### Receiving Protocol
+
+Builders may receive `PEER_NOTIFICATION` messages at any point during their work:
+1. Read the message content
+2. If relevant to current task: adapt approach (e.g., reuse a newly created utility, adjust for a renamed import)
+3. If not relevant: ignore and continue
+4. **Never reply** to peer messages — they are one-way
+5. **Never block** waiting for peer input
+
+### Interaction with Notepad
+
+Peer messages and notepad entries serve different timescales:
+- **Peer messages**: real-time, within the current wave (reaches concurrent builders immediately)
+- **Notepad entries**: post-commit, for future waves (reaches builders who claim tasks later)
+
+If a discovery is useful for both current peers AND future tasks, do both:
+1. Send a `PEER_NOTIFICATION` to affected concurrent peers
+2. Include it as a `NOTEPAD_ENTRY` in your `IMPLEMENTATION COMPLETE` message
+
+### When NOT to Send
+
+- Discovery only matters for future tasks → use `NOTEPAD_ENTRY` only
+- Not sure if peer is affected → skip (avoid false positives)
+- Budget exhausted (2 messages sent for current task) → save it for `NOTEPAD_ENTRY`
+- Sequential mode (`peerBuilderNames` is "none") → protocol is disabled
+- Trivial changes that don't affect peers → skip
 
 ---
 

@@ -259,6 +259,7 @@ Repeat the following loop until no tasks remain:
 3. Call TaskUpdate(taskId, status: "in_progress", owner: "{builderName}") to claim the task.
 4. Call TaskGet(taskId) → read the full task description (contains the complete task spec).
 5. Parse the plan task ID from the subject field: "[{planTaskId}] ...".
+   (Peer message budget resets to 0 for the new task.)
 6. Read .fractal-planner/plans/{planId}/notepad.md. Filter for relevant entries: include if the entry is among the last 10, OR the entry's task had overlapping files with the current task. Cap at 10 entries.
 7. Send to "team-lead":
    "TASK_CLAIMED: {planTaskId}
@@ -309,6 +310,32 @@ OPTIONS:
 - {label} | {description}
 ..."
 Wait for CLARIFICATION ANSWER before continuing implementation.
+
+PEER COMMUNICATION (parallel mode only — skip if peerBuilderNames is "none"):
+Budget: 2 peer messages max per task. Do NOT exceed this.
+When to notify peers (SendMessage to a specific peer builder by name):
+- You created a new shared utility/interface that peers working on related files could reuse
+- You discovered a pattern or constraint that affects a peer's likely work area
+- You detected a conflict (e.g. both modifying the same file, incompatible interface changes)
+- You moved/renamed a file that a peer's task references
+
+Format — send to the specific peer(s) affected:
+"PEER_NOTIFICATION
+TYPE: INTERFACE_CREATED | PATTERN_FOUND | CONFLICT_WARNING | FILE_MOVED
+DETAILS:
+  {1-3 lines: what you did, where, and what the peer should do about it}"
+
+When NOT to send:
+- Your discovery only matters for future tasks (use NOTEPAD_ENTRY instead)
+- You're unsure if a peer is affected (don't guess — skip it)
+- You've already used your 2-message budget for this task
+- Only one builder is active (peerBuilderNames is "none")
+
+Processing incoming peer messages:
+- Read and integrate the information if relevant to your current task
+- Do NOT reply — peer messages are one-way notifications
+- Do NOT pause your work to wait for peer messages
+- If a peer warns about a conflict, adapt your approach accordingly
 ```
 
 ### Verifier Subagent Spec
