@@ -341,6 +341,7 @@ describe('validateTaskTree', () => {
     expect(types).toContain('missing-files');
     expect(types).toContain('missing-tests-required');
     expect(types).toContain('missing-hints');
+    expect(types).toContain('missing-guardrails');
   });
 
   test('missing-hints violation on leaf with no hints', () => {
@@ -376,6 +377,39 @@ describe('validateTaskTree', () => {
     expect(hintsViolations).toHaveLength(0);
   });
 
+  test('missing-guardrails violation on leaf with no guardrails', () => {
+    const root = makeTask({
+      id: 'root',
+      estimatedComplexity: 8,
+      subtasks: [
+        makeTask({ id: '1', metadata: { filesToModify: ['src/a.ts'], testsRequired: true, hints: ['Do the thing'] } }),
+        makeTask({ id: '2' }),
+      ],
+    });
+
+    const result = validateTaskTree(root, 5);
+    expect(result.valid).toBe(false);
+    const missing = result.violations.filter(v => v.type === 'missing-guardrails');
+    expect(missing).toHaveLength(1);
+    expect(missing[0].id).toBe('1');
+    expect(missing[0].detail).toBe('leaf task has no guardrails');
+  });
+
+  test('missing-guardrails not triggered when guardrails are present', () => {
+    const root = makeTask({
+      id: 'root',
+      estimatedComplexity: 8,
+      subtasks: [
+        makeTask({ id: '1' }),
+        makeTask({ id: '2' }),
+      ],
+    });
+
+    const result = validateTaskTree(root, 5);
+    const guardrailsViolations = result.violations.filter(v => v.type === 'missing-guardrails');
+    expect(guardrailsViolations).toHaveLength(0);
+  });
+
   test('heading-format markdown parses and validates successfully', () => {
     const md = `# Task Tree
 
@@ -394,6 +428,8 @@ describe('validateTaskTree', () => {
   - Tests pass
 - Hints:
   - Follow existing patterns
+- Guardrails:
+  - Do NOT modify files outside: src/a.ts
 
 ### [1.2] Implement feature B
 - Complexity: 3
@@ -404,6 +440,8 @@ describe('validateTaskTree', () => {
   - Feature B integrates with A
 - Hints:
   - Use module A API
+- Guardrails:
+  - Do NOT modify files outside: src/b.ts
 
 ## [2] Second module
 - Complexity: 5
@@ -420,6 +458,8 @@ describe('validateTaskTree', () => {
   - Validated by schema
 - Hints:
   - Use Zod schema
+- Guardrails:
+  - Do NOT modify files outside: config/setup.json
 
 ### [2.2] Build handler
 - Complexity: 4
@@ -431,6 +471,8 @@ describe('validateTaskTree', () => {
   - Error handling present
 - Hints:
   - Follow handler pattern from src/existing.ts
+- Guardrails:
+  - Do NOT modify files outside: src/handler.ts
 `;
     const root = parseTasksMarkdown(md);
     const result = validateTaskTree(root, 5);
@@ -447,7 +489,7 @@ describe('validateTaskTree', () => {
         makeTask({
           id: '1',
           estimatedComplexity: 3,
-          metadata: { filesToModify: [], testsRequired: false, hints: ['Do the thing'] },
+          metadata: { filesToModify: [], testsRequired: false, hints: ['Do the thing'], guardrails: ['Do NOT add new dependencies'] },
         }),
       ],
     });

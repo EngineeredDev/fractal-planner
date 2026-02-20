@@ -6,6 +6,7 @@ export type ViolationType =
   | 'missing-files'
   | 'missing-tests-required'
   | 'missing-hints'
+  | 'missing-guardrails'
   | 'subtask-count';
 
 export interface TaskViolation {
@@ -31,6 +32,7 @@ export interface ValidationResult {
  * - Leaves have acceptance criteria
  * - Leaves have filesToModify metadata
  * - Leaves have testsRequired metadata
+ * - Leaves have guardrails metadata
  * - Non-leaf, non-root nodes have 2-5 subtasks
  */
 export function validateTaskTree(root: Task, maxComplexity: number): ValidationResult {
@@ -90,6 +92,16 @@ export function validateTaskTree(root: Task, maxComplexity: number): ValidationR
           parentId,
           depth,
           detail: 'leaf task has no implementation hints',
+        });
+      }
+      if (!task.metadata?.guardrails || task.metadata.guardrails.length === 0) {
+        violations.push({
+          type: 'missing-guardrails',
+          id: task.id,
+          description: task.description,
+          parentId,
+          depth,
+          detail: 'leaf task has no guardrails',
         });
       }
     } else {

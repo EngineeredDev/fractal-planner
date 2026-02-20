@@ -49,7 +49,7 @@ Every leaf task (no children) must have:
 - **Tests Required**: Whether tests must be written (`yes`/`no`)
 - **Hints**: 2-4 implementation steps telling the builder HOW to do it (not just WHAT). Include specific function names, patterns to follow, and sequence of operations.
 - **References** (when applicable): File paths with line numbers demonstrating patterns to follow. Use `file:line - explanation` format. Omit if no relevant existing code to reference.
-- **Guardrails** (when applicable): Scope boundaries and over-engineering traps to avoid. Include "Do NOT" constraints derived from scope exclusions. Omit if no specific constraints apply.
+- **Guardrails** (required on every leaf): Scope boundaries and over-engineering traps to avoid. ALWAYS include at minimum: "Do NOT modify files outside: {files list}" and "Do NOT add new dependencies". Add additional "Do NOT" constraints from scope exclusions. Every leaf must have at least one guardrail.
 - **Test Commands** (when applicable): Explicit test run commands (e.g., `bun test src/foo.test.ts`). Omit if the test command is obvious from context.
 
 ### 4. Context Injection
@@ -67,6 +67,7 @@ The builder agent has **NO access** to interview or research context. The per-ta
 Before writing the final `tasks.md`, walk through your entire tree and check:
 - Every leaf task has complexity <= maxComplexity
 - Every leaf task has Hints (2-4 items)
+- Every leaf task has Guardrails (at minimum: file-boundary + no-new-deps)
 - If any leaf is above the threshold, decompose it further — do NOT lower its complexity score to avoid decomposition
 - Parent (non-leaf) tasks are expected to have high complexity; only leaves matter
 
@@ -122,6 +123,9 @@ Write to `{planDir}/tasks.md` using this exact format:
       - Follow the middleware pattern from src/middleware/example.ts
     - References:
       - src/middleware/example.ts:10 - middleware registration pattern
+    - Guardrails:
+      - Do NOT modify files outside: src/path/to/other.ts
+      - Do NOT add new dependencies
 - [ID: 2] Second major component (Complexity: N)
   - [ID: 2.1] Setup (Complexity: N)
     - Acceptance: Criterion 1
@@ -131,6 +135,9 @@ Write to `{planDir}/tasks.md` using this exact format:
     - Hints:
       - Add the new config key to the existing schema
       - Follow the same structure as the "database" config block
+    - Guardrails:
+      - Do NOT modify files outside: config/file.json
+      - Do NOT add new dependencies
 ```
 
 ## Deep Tree Example (maxComplexity = 3)
@@ -171,6 +178,9 @@ This example shows a 3-level decomposition where a complexity-6 parent is broken
       - Extract token from "Bearer <token>" format in Authorization header
     - References:
       - src/middleware/logging.ts:8 - middleware structure to follow
+    - Guardrails:
+      - Do NOT modify files outside: src/middleware/auth.ts
+      - Do NOT add new dependencies
     - Test Commands: bun test src/middleware/auth.test.ts
   - [ID: 1.3] Integrate middleware into router (Complexity: 2)
     - Acceptance: Protected routes require valid token, Public routes remain accessible
@@ -181,6 +191,8 @@ This example shows a 3-level decomposition where a complexity-6 parent is broken
       - Add auth middleware to protected route groups in src/router.ts
       - Keep public routes (health, login) outside the auth middleware group
     - Guardrails:
+      - Do NOT modify files outside: src/router.ts
+      - Do NOT add new dependencies
       - Do NOT modify the login endpoint (task 2.2 handles that)
 - [ID: 2] Add login endpoint (Complexity: 5)
   - [ID: 2.1] Create password hashing utility (Complexity: 2)
@@ -191,6 +203,9 @@ This example shows a 3-level decomposition where a complexity-6 parent is broken
     - Hints:
       - Use bcrypt library for hashing (already in package.json)
       - Export two functions: hashPassword(plain) and comparePassword(plain, hash)
+    - Guardrails:
+      - Do NOT modify files outside: src/utils/password.ts
+      - Do NOT add new dependencies
     - Test Commands: bun test src/utils/password.test.ts
   - [ID: 2.2] Implement login route handler (Complexity: 3)
     - Acceptance: Validates credentials against DB, Returns JWT on success, Returns 401 on failure
@@ -214,7 +229,8 @@ Note: Task `1` has complexity 6, which is above maxComplexity=3 — so it is dec
 ## Important
 
 - Every leaf MUST have Acceptance, Dependencies, Files, Tests Required, and Hints lines
-- References, Guardrails, and Test Commands are recommended but not required on every leaf
+- References and Test Commands are recommended but not required on every leaf
+- Guardrails are **required** on every leaf (at minimum: file-boundary + no-new-deps)
 - Use the research findings to inform file paths and dependencies
 - Keep subtask count per parent between 2-5 (avoid over-decomposition)
 - Non-leaf tasks do NOT need metadata lines — only the `[ID: ...] Description (Complexity: N)` line

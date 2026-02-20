@@ -23,6 +23,7 @@ export function makeTask(overrides?: Partial<Task>): Task {
       filesToModify: ['src/example.ts'],
       testsRequired: true,
       hints: ['Implement the task'],
+      guardrails: ['Do NOT modify files outside the task scope'],
     },
     ...overrides,
   };

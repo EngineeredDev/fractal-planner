@@ -168,39 +168,57 @@ The context is injected into:
 
 The `owner` field is set by the builder itself during the claim step (TaskUpdate), using its own name (e.g., `builder-1`). This naming convention enables P3 tooling that reads `owner` from task JSON files.
 
-### Task Description Template
+### Structured Delegation Format
 
-The `description` field of each native task holds the complete static builder payload:
+The `description` field of each native task holds a rigid 6-section builder payload. This format constrains builder behavior by making guardrails explicit and always present.
 
 ```markdown
-## Task {planTaskId}
-{description}
+## TASK
+{one-sentence atomic goal from task.description}
 
-### Acceptance Criteria
-1. {criterion}
-2. {criterion}
+## EXPECTED OUTCOME
+1. {criterion from task.acceptanceCriteria}
+2. {criterion from task.acceptanceCriteria}
 
-### Files to Modify
-{list of files, or "Determine from context"}
+## MUST DO
+- {hint from task.metadata.hints}
+- {reference from task.metadata.references, if any}
 
-### Tests Required
-{yes | no}
+## MUST NOT DO
+- Do NOT modify files outside: {task.metadata.filesToModify list}
+- Do NOT add new dependencies
+- Do NOT refactor existing code beyond the task scope
+- {additional guardrail from task.metadata.guardrails}
 
-### Test Commands
-{commands, or omit section if none}
+## CONTEXT
+- Files: {task.metadata.filesToModify}
+- Tests Required: {task.metadata.testsRequired — yes/no}
+- References: {task.metadata.references, or omit line if none}
 
-### Implementation Hints
-{hints, or omit section if none}
-
-### References
-{file:line references, or omit section if none}
-
-### MUST NOT DO
-{guardrails, or omit section if none}
-
-### Dependencies
-{plan task IDs, or "none"}
+## VERIFICATION
+- Test Commands: {task.metadata.testCommands, or "none"}
+- Evidence: .fractal-planner/plans/{planId}/evidence/task-{id}-verification.md
 ```
+
+#### Section Construction Rules
+
+| Section | Source Fields | Notes |
+|---------|-------------|-------|
+| TASK | `task.description` | One sentence only |
+| EXPECTED OUTCOME | `task.acceptanceCriteria` | Numbered list |
+| MUST DO | `task.metadata.hints` + `task.metadata.references` | References formatted as "Read {file}:{line} — {explanation}" |
+| MUST NOT DO | Baseline guardrails + `task.metadata.guardrails` | 3 baseline items always present (see below), then task-specific |
+| CONTEXT | `task.metadata.filesToModify`, `task.metadata.testsRequired`, `task.metadata.references` | Static context only |
+| VERIFICATION | `task.metadata.testCommands`, `task.metadata.testsRequired` | Evidence file path included |
+
+**Baseline guardrails** (always in MUST NOT DO, regardless of task metadata):
+1. `Do NOT modify files outside: {filesToModify list}`
+2. `Do NOT add new dependencies`
+3. `Do NOT refactor existing code beyond the task scope`
+
+Task-specific guardrails from `task.metadata.guardrails` are appended after these three.
+
+**Note**: Dependencies are NOT included in the payload — they are handled by native `addBlockedBy` on TaskCreate.
 
 Do NOT include dynamic content (notepad entries, codebase context) in the native task description. Codebase context is injected at builder spawn time; notepad entries are read by the builder per-task from `notepad.md`.
 

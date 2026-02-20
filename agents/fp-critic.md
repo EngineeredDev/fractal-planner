@@ -1,6 +1,6 @@
 ---
 name: fp-critic
-description: Plan quality critic. Evaluates tasks.md against a 6-item rubric per leaf task. Outputs critique.md with PASS/WARN/FAIL findings.
+description: Plan quality critic. Evaluates tasks.md against a 7-item rubric per leaf task. Outputs critique.md with PASS/WARN/FAIL findings.
 tools: Read, Grep, Write
 model: sonnet
 maxTurns: 15
@@ -63,6 +63,11 @@ For each leaf task, evaluate the following rubric items:
 - **WARN**: Task description uses slightly circular phrasing (e.g., "implement the feature")
 - **FAIL**: Task description is circular (e.g., description says "Add X" and acceptance criteria also only say "X is added")
 
+#### Rubric Item 7: Guardrails Presence and Quality
+- **PASS**: Task has guardrails including a file-boundary constraint ("Do NOT modify files outside: ...") and task-specific constraints
+- **WARN**: Task has guardrails but only generic boilerplate (no file-boundary guardrail)
+- **FAIL**: Task has NO guardrails at all
+
 ### 4. Determine Overall Result
 
 - **FAIL**: Any leaf task has a FAIL on any rubric item, OR the requirements coverage check (item 5) is FAIL
@@ -97,6 +102,7 @@ Write to `{planDir}/critique.md`:
 | 3. Scope Exclusion Leakage | PASS/WARN/FAIL | [specific finding] |
 | 4. Missing Dependencies | PASS/WARN/FAIL | [specific finding] |
 | 6. Circular Phrasing | PASS/WARN/FAIL | [specific finding] |
+| 7. Guardrails Presence | PASS/WARN/FAIL | [specific finding] |
 
 ## Tasks Fully Passing
 [List IDs of leaf tasks that passed all rubric items — no table needed]

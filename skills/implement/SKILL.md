@@ -98,7 +98,7 @@ taskMap = {}
 For each leaf task in topological order:
   nativeId = TaskCreate({
     subject: "[{task.id}] {task.description truncated to 80 chars}",
-    description: {full static payload — see reference.md "Native Task Format"},
+    description: {full static payload — see reference.md "Structured Delegation Format"},
     activeForm: "Implementing [{task.id}]",
     addBlockedBy: [taskMap[depId] for depId in task.dependencies if depId in taskMap]
   }).id
@@ -314,6 +314,11 @@ Description: {description}
 Acceptance Criteria:
 {numbered criteria from plan}
 
+MUST NOT DO constraints:
+{guardrails from task — always includes baseline + task-specific}
+
+Files Allowed: {filesToModify list from task metadata}
+
 Files Modified by Builder:
 {FILES_MODIFIED list from builder's message}
 
@@ -325,9 +330,14 @@ Tests Required: {yes/no}
 Instructions:
 1. Read each modified file listed above.
 2. For each acceptance criterion, verify it is met by the code.
-3. If tests are required, run the test commands via Bash.
-4. Run: bun run typecheck (if tsconfig.json exists in the project root).
-5. Write your evidence to: {evidencePath}
+3. Check MUST NOT DO constraints:
+   a. File boundary: Compare FILES_MODIFIED against Files Allowed. Any file modified that is NOT in the allowed list is a MUST NOT DO violation (exception: new test files co-located with allowed files are permitted).
+   b. New dependencies: Check if package.json was modified. If so, diff it to see if new dependencies were added — this is a violation.
+   c. Task-specific guardrails: Verify each additional MUST NOT DO constraint is respected.
+   If ANY MUST NOT DO violation is found, the overall result is FAIL regardless of criteria results.
+4. If tests are required, run the test commands via Bash.
+5. Run: bun run typecheck (if tsconfig.json exists in the project root).
+6. Write your evidence to: {evidencePath}
 
 Evidence file format:
 ```markdown
@@ -341,6 +351,13 @@ Task: {description}
 | # | Criterion | Result | Evidence |
 |---|-----------|--------|---------|
 | 1 | {text} | PASS/FAIL | {code snippet or "met" or specific failure} |
+
+## MUST NOT DO Check
+| Constraint | Result | Evidence |
+|-----------|--------|---------|
+| File boundary ({allowed files}) | PASS/FAIL | {list of violating files, or "all files within scope"} |
+| No new dependencies | PASS/FAIL | {added deps, or "package.json unchanged"} |
+| {task-specific guardrail} | PASS/FAIL | {evidence} |
 
 ## Test Output
 \`\`\`
@@ -359,17 +376,20 @@ Task: {description}
 {1-2 sentence summary}
 ```
 
-6. After writing the evidence file, report your findings in this EXACT format:
+7. After writing the evidence file, report your findings in this EXACT format:
 
-If ALL criteria pass and tests/typecheck pass:
+If ALL criteria pass AND all MUST NOT DO checks pass AND tests/typecheck pass:
   VERIFICATION PASSED
   All {N} criteria met.
+  MUST NOT DO: All constraints respected.
   [1-2 sentence summary of what was verified]
 
 If ANY check fails:
   VERIFICATION FAILED
   Failed:
   - Criterion {N}: {text} — {specific failure reason and fix instruction}
+  MUST NOT DO Violations:
+  - {constraint}: {specific violation and fix instruction}
   Passed:
   - Criterion {N}: {text}
   Tests: {PASS/FAIL with relevant output}

@@ -550,6 +550,7 @@ Instructions per violation type:
 - [missing-files]: Add a Files: line listing the files this task will modify (use 'none' only if truly no files are touched).
 - [missing-tests-required]: Add a Tests Required: line (yes/no) to the leaf task.
 - [missing-hints]: Add 2-4 implementation steps as a Hints: block. Tell the builder HOW to implement, not just WHAT.
+- [missing-guardrails]: Add a Guardrails: block with at least: "Do NOT modify files outside: {files}" and "Do NOT add new dependencies". Add task-specific constraints from scope exclusions.
 - [subtask-count]: Merge or split children so the parent has 2-5 subtasks.
 
 General:
