@@ -130,9 +130,28 @@ If `isResume == true`:
    - If `nativeTask.status == "in_progress"`: call `TaskUpdate(nativeId, status: "pending")` — reset orphaned in-progress task
    - Else if `nativeTask.status == "completed"` AND `nativeTask.metadata.fpStatus == "FAILED"`: `failedTasks.add(planTaskId)`
    - Else if `nativeTask.status == "completed"` (fpStatus absent or "COMPLETED"): `completedTasks.add(planTaskId)`
-   - `pending` or `deleted` tasks → handled naturally by wave computation
+   - `pending` or `deleted` tasks → handled naturally by builder self-claiming
 4. `skippedTasks` = set of plan task IDs from `executionState.skippedTasks` keys
-5. Display resume stats:
+5. **Detect falsely-ready tasks** (critical for resume — prevents builders from claiming tasks whose dependencies failed):
+   ```
+   For each pending task in liveTaskList where blockedBy is empty:
+     planTaskId = inverse taskMap lookup for task.id
+     For each depId in task's dependency list (from parsed tasks.md):
+       depNativeId = taskMap[depId]
+       depNativeTask = find in liveTaskList by id
+       if depNativeTask.status == "completed" AND depNativeTask.metadata.fpStatus == "FAILED":
+         TaskUpdate(task.id, status: "deleted", metadata: { fpStatus: "SKIPPED", reason: "Blocked by failed dependency {depId}" })
+         Read execution-state.json, set skippedTasks[planTaskId] = "Blocked by {depId}", write back
+         skippedTasks.add(planTaskId)
+         break
+       if depNativeTask.status == "deleted":
+         TaskUpdate(task.id, status: "deleted", metadata: { fpStatus: "SKIPPED", reason: "Blocked by skipped dependency {depId}" })
+         Read execution-state.json, set skippedTasks[planTaskId] = "Blocked by {depId}", write back
+         skippedTasks.add(planTaskId)
+         break
+   ```
+   This must run before spawning builders so they never see these falsely-ready tasks.
+6. Display resume stats:
    ```
    ## Resuming Implementation ({planId})
    Previous progress found:
@@ -200,43 +219,75 @@ LINEAR_MAPPING:
 
 **Wait for the tracker to respond with `TRACKER READY`** before proceeding.
 
-**Note**: After sending INIT and receiving TRACKER READY, the tracker sits idle until you send `TASK_STARTED`. Do not send any other messages to the tracker between now and Step 5.2.
+**Note**: After sending INIT and receiving TRACKER READY, the tracker sits idle until you send `TASK_STARTED`. Do not send any other messages to the tracker between now and Step 5.3.
 
 ## Step 4.4: Define Builder & Verifier Specs
 
-The builder is **spawned fresh for each iteration** (in Step 5) so it starts with clean context. Verification is handled by a **lead-spawned verification subagent** after the builder completes — no hooks or persistent verifier teammate needed.
+Builders are **persistent teammates** that run a self-claiming work loop across multiple tasks. Verification is handled by a **lead-spawned verification subagent** after the builder completes — no hooks or persistent verifier teammate needed.
 
 ### Builder Teammate Spec
 
-Name: **builder**
-Tools: `Read`, `Write`, `Edit`, `Bash`, `Glob`, `Grep`
+Name: **builder-{N}** (where N = 1 to `maxParallelTasks`)
+Tools: `Read`, `Write`, `Edit`, `Bash`, `Glob`, `Grep`, `TaskList`, `TaskUpdate`, `TaskGet`, `SendMessage`
 
-Instructions for builder (inject `{codebaseContext}` from Step 2):
+Instructions for builder (inject `{builderName}`, `{codebaseContext}`, `{planId}`, `{peerBuilderNames}`):
 ```
-You are a builder agent on the fp-impl-{planId} team.
+You are {builderName}, a persistent builder agent on the fp-impl-{planId} team.
 
 {codebaseContext}
 
-RULES:
-- You receive ONE task at a time from the lead. If given more than one, reject and ask for a single task.
+Your peer builders: {peerBuilderNames}
+
+SELF-CLAIMING WORK LOOP:
+Repeat the following loop until no tasks remain:
+
+1. Call TaskList() → filter for tasks with status: "pending" and blockedBy: [] (empty).
+2. Pick the lowest-ID task from the filtered list. If no tasks match → send "NO_MORE_TASKS: {builderName}" to "team-lead" and STOP.
+3. Call TaskUpdate(taskId, status: "in_progress", owner: "{builderName}") to claim the task.
+4. Call TaskGet(taskId) → read the full task description (contains the complete task spec).
+5. Parse the plan task ID from the subject field: "[{planTaskId}] ...".
+6. Read .fractal-planner/plans/{planId}/notepad.md. Filter for relevant entries: include if the entry is among the last 10, OR the entry's task had overlapping files with the current task. Cap at 10 entries.
+7. Send to "team-lead":
+   "TASK_CLAIMED: {planTaskId}
+   Builder: {builderName}
+   NativeId: {nativeTaskId}"
+8. Implement the task following ALL rules below.
+9. When done, send to "team-lead":
+   "IMPLEMENTATION COMPLETE: {planTaskId}
+
+   FILES_MODIFIED:
+   - /absolute/path/to/file1.ts
+   - /absolute/path/to/file2.test.ts
+
+   NOTEPAD_ENTRY:
+   - PATTERN: description (only if you discovered something useful)"
+   Include ALL files you created or modified. Use absolute paths.
+   NOTEPAD_ENTRY is optional — only include if you discovered something genuinely useful.
+10. Wait for lead response:
+    - "VERIFICATION PASSED: {planTaskId}" → loop back to step 1
+    - "VERIFICATION FAILED: {planTaskId}\n..." → fix the issues described, then re-send IMPLEMENTATION COMPLETE
+    - "MAX_ITERATIONS_REACHED: {planTaskId}" → loop back to step 1
+    - "TASK_ALREADY_CLAIMED: {planTaskId}" → loop back to step 1
+
+IMPLEMENTATION RULES:
 - Implement with REAL code only. No stubs, placeholders, TODOs, or "coming soon" comments.
-- If the task metadata says testsRequired: true, write tests.
+- If the task says testsRequired: true, write tests.
 - Follow existing codebase patterns and conventions (see Codebase Context above if provided).
 - If the task has "Implementation Hints", follow them as your implementation guide — they describe HOW to implement, not just WHAT.
 - If the task has "References", read those files/lines BEFORE coding to understand the patterns you should follow.
 - If the task has "MUST NOT DO" constraints, treat them as hard constraints — violating them will fail verification.
 - Track which files you modify (every Write/Edit/creation operation).
+- Never claim more than one task at a time.
+- Always wait for the lead's verification response before claiming the next task.
 
-COMPLETION PROTOCOL:
-1. When implementation is complete, message "team-lead" with:
-   "IMPLEMENTATION COMPLETE: {id}
-
-   FILES_MODIFIED:
-   - /absolute/path/to/file1.ts
-   - /absolute/path/to/file2.test.ts"
-   Include ALL files you created or modified. Use absolute paths.
-2. Then go idle. The lead will verify your work separately.
-3. You perform exactly ONE implementation pass per spawn.
+CLARIFICATION PROTOCOL (iteration 1 only, once per task):
+If you encounter a genuine ambiguity, send to "team-lead":
+"CLARIFICATION NEEDED: {planTaskId}
+QUESTION: {question}
+OPTIONS:
+- {label} | {description}
+..."
+Wait for CLARIFICATION ANSWER before continuing implementation.
 ```
 
 ### Verifier Subagent Spec
@@ -318,180 +369,153 @@ If ANY check fails:
 ```
 
 
-## Step 5: Execute Tasks (Lead-Driven Wave Loop)
+## Step 5: Execute Tasks (Builder Self-Claiming Loop)
 
 **ROUTING RULES — read before executing the loop:**
 - `tracker` receives ONLY: `TASK_STARTED`, `TASK_COMPLETED`, `TASK_FAILED`, `TASK_SKIPPED`, `ROLLUP_PARENTS`
-- `builder` receives ONLY: implementation task payloads (description, criteria, hints)
+- `builder-N` receives ONLY: `VERIFICATION PASSED`, `VERIFICATION FAILED`, `MAX_ITERATIONS_REACHED`, `CLARIFICATION ANSWER`, `TASKS_AVAILABLE`, `TASK_ALREADY_CLAIMED`
+- Lead NEVER sends task descriptions/criteria/hints to builders (builders self-read via TaskGet)
 - NEVER send task descriptions, acceptance criteria, code context, or implementation hints to the tracker
-- If you send the wrong payload to the wrong agent, the tracker will reject it and you must retry with the correct recipient
 
-The lead executes tasks in **waves** based on `maxParallelTasks` from config (default: 1 = sequential). A wave is a set of tasks whose dependencies are all completed — they can be built in parallel.
-
-Maintain these sets (initialized in Step 4.1, or empty for fresh runs):
-- `completedTasks` — plan task IDs that are done
-- `failedTasks` — plan task IDs that failed
-- `skippedTasks` — plan task IDs that were skipped or blocked
-
-Also read `notepad.md` from the plan directory at the start of Step 5 (before the first wave). Set `notepadContents` to the file contents, or empty string if not found.
-
-### 5.1: Compute Ready Tasks
-
-At the start of each wave iteration:
+### 5.0: Initialize Lead State
 
 ```
-liveTaskList = TaskList()
-
-readyNative = [t for t in liveTaskList if t.status == "pending" and t.blockedBy == []]
-
-# Detect tasks auto-unblocked by a FAILED parent (parent marked "completed" + fpStatus:FAILED,
-# which clears blockedBy in the native system, but the dependent should still be skipped).
-# This primarily handles resume scenarios where Step 5.8 cleanup was interrupted.
-blockedByFailed = []
-For each t in readyNative:
-  planTaskId = inverse taskMap lookup for t.id
-  For each depId in task's dependency list (from parsed tasks.md):
-    depNativeId = taskMap[depId]
-    depNativeTask = find in liveTaskList by id (or fetch via TaskGet)
-    if depNativeTask.status == "completed" AND depNativeTask.metadata.fpStatus == "FAILED":
-      blockedByFailed.append(planTaskId)
-      break
-    if depNativeTask.status == "deleted":  # was skipped
-      blockedByFailed.append(planTaskId)
-      break
-
-For each planTaskId in blockedByFailed:
-  nativeId = taskMap[planTaskId]
-  TaskUpdate(nativeId, status: "deleted", metadata: { fpStatus: "SKIPPED", reason: "Blocked by failed/skipped dependency" })
-  Read execution-state.json, set skippedTasks[planTaskId] = "Blocked by failed/skipped dependency", write back
-  Send to tracker: "TASK_SKIPPED: {planTaskId}\nReason: Blocked by failed/skipped dependency"
-  Wait for ACK_SKIPPED: {planTaskId}
-  skippedTasks.add(planTaskId)
-  Remove from readyNative
-
-currentWave = readyNative[:maxParallelTasks]  (translate native IDs back to plan IDs via inverse taskMap)
+builderTaskMap = {}        // builderName → planTaskId (current assignment)
+iterationMap = {}          // planTaskId → current iteration number
+clarificationsUsed = {}    // planTaskId → boolean
+activeBuilders = set()     // builders that haven't sent NO_MORE_TASKS
+idleBuilders = set()       // builders that have sent NO_MORE_TASKS
+commitQueue = []           // ordered list of {planTaskId, filesModified, builderName, iteration, nativeId}
+completedTasks, failedTasks, skippedTasks (from Step 4.1 or empty for fresh runs)
 ```
 
-If `currentWave` is empty:
-- If there are still `pending` tasks in `liveTaskList` with unresolved `blockedBy`: warn that dependencies are unresolvable and jump to Step 6
-- Otherwise: all tasks handled — jump to Step 6
+Read `notepad.md` from the plan directory. Set `notepadContents` to the file contents, or empty string if not found.
 
-Proceed to 5.2 with `currentWave`.
+### 5.1: Spawn Persistent Builders
 
-### 5.2: Notify Tracker of Wave Start (all tasks in wave)
-
-For each task in `currentWave`:
-1. `TaskUpdate(nativeId, status: "in_progress", owner: "builder-{planTaskId}")` — forward-compat: owner field identifies the builder
-2. Send to tracker: `TASK_STARTED: {planTaskId}`
-
-Wait for `ACK_STARTED: {planTaskId}` for each task before spawning builders. You may send all TASK_STARTED messages and then wait for all ACKs (parallel sends, then collect all ACKs).
-
-### 5.3: Spawn Builders for Wave
-
-For each task in `currentWave`, spawn a **fresh builder teammate** (see Step 4.4 builder spec).
-
-Read `notepad.md` from the plan directory. For each builder, inject relevant notepad entries in the task payload. Relevance filter: include an entry if:
-- The entry was added within the last 10 entries total, OR
-- The entry's associated task had overlapping `filesToModify` with the current task
-
-**Send each builder its task payload** (send to all wave builders simultaneously):
-
-On iteration 1 for a task:
 ```
-{If notepad has relevant entries:}
-## Shared Notepad (discoveries from previous tasks)
-{relevant notepad entries, newest first, max 10}
-
----
-
-{codebaseContext}
-
-Implement task {id}:
-Description: {description}
-
-Acceptance Criteria:
-{numbered list of criteria}
-
-Implementation Hints:
-{numbered hints from task metadata, or omit section if empty}
-
-References:
-{file:line refs from task metadata, or omit section if empty}
-
-Files to Modify: {list or "determine from context"}
-Tests Required: {yes/no}
-Test Commands: {explicit commands from task metadata, or omit line if empty}
-
-MUST NOT DO:
-{bulleted guardrails from task metadata, or omit section if empty}
+N = maxParallelTasks (from config, default 1)
+For i in 1..N:
+  Spawn teammate "builder-{i}" on team fp-impl-{planId}
+    - Use builder spec from Step 4.4
+    - Inject: builderName="builder-{i}", codebaseContext, planId
+    - Inject: peerBuilderNames = comma-separated list of all OTHER builder names (e.g. "builder-2, builder-3" for builder-1)
+    - If N == 1: peerBuilderNames = "none"
+  Add "builder-{i}" to activeBuilders
 ```
 
-On iteration 2+ for a task (re-try after failed verification):
+Builders start their self-claiming loops immediately — no initial message from lead needed.
+
+### 5.2: Lead Message-Handling Loop
+
 ```
-PREVIOUS ATTEMPT FAILED (iteration {iteration-1}/{maxIterations}).
-Verification report from previous attempt:
-{paste VERIFICATION FAILED output from verifier}
+While activeBuilders is not empty OR commitQueue is not empty:
+  Wait for next message from any teammate.
+  Route by message prefix:
+    "TASK_CLAIMED:"            → Step 5.3
+    "IMPLEMENTATION COMPLETE:" → Step 5.4
+    "CLARIFICATION NEEDED:"   → Step 5.5
+    "NO_MORE_TASKS:"           → Step 5.6
 
-Review the existing code on disk and fix all issues listed above.
-Here is the full task specification:
+  After handling each message, process commitQueue if non-empty (Step 5.7).
 
-Implement task {id}:
-[same as iteration 1 but without codebaseContext, with notepad if relevant]
+If activeBuilders is empty AND commitQueue is empty:
+  Proceed to Step 6.
 ```
 
-**CLARIFICATION NEEDED protocol (iteration 1 only)**: If a builder sends a message starting with `CLARIFICATION NEEDED: {id}` before `IMPLEMENTATION COMPLETE`, intercept it:
-- Verify this is iteration 1 for this task. If iteration > 1, reject: `SendMessage(recipient: builder-{id}, content: "Clarification only allowed on iteration 1. Proceed with the task spec and the failure report.")`
-- If iteration 1: parse the CLARIFICATION NEEDED message (see reference.md for format), call `AskUserQuestion`, then forward the answer: `SendMessage(recipient: builder-{id}, content: "CLARIFICATION ANSWER: {id}\nUser selected: \"{option}\"\nContext: {additional text}")`
-- Budget: 1 clarification per task total. Track in a `clarificationsUsed` map.
+### 5.3: Handle TASK_CLAIMED
 
-Wait for all builders in the wave to either send `IMPLEMENTATION COMPLETE: {id}` or exhaust their turns. If a builder's turns are exhausted without completing, treat it as a verification failure.
+1. Parse `planTaskId`, `builderName`, `nativeId` from the message.
+2. **Check for duplicate claim**: if another builder already has this `planTaskId` in `builderTaskMap` values, send `TASK_ALREADY_CLAIMED: {planTaskId}` back to the sender. Return.
+3. Record: `builderTaskMap[builderName] = planTaskId`
+4. Set `iterationMap[planTaskId] = 1` if not already set.
+5. Send `TASK_STARTED: {planTaskId}` to tracker. Wait for `ACK_STARTED: {planTaskId}`.
 
-**Extract NOTEPAD_ENTRY**: After each builder sends `IMPLEMENTATION COMPLETE: {id}`, check if the message contains a `NOTEPAD_ENTRY:` section. If present:
-1. Extract each entry line (lines starting with `- `)
-2. Append to `notepad.md` with a `[Task {id}]` prefix on each line
-3. Update `notepadContents` in memory
+### 5.4: Handle IMPLEMENTATION COMPLETE
 
-### 5.4: Verify Wave (parallel verifiers)
+1. Parse `planTaskId`, FILES_MODIFIED, optional NOTEPAD_ENTRY from the message.
+2. If NOTEPAD_ENTRY present: append entries to `notepad.md` with `[Task {planTaskId}]` prefix, update `notepadContents`.
+3. Identify sender `builderName`.
+4. Look up `nativeId = taskMap[planTaskId]`.
+5. Spawn verifier subagent (same spec as Step 4.4 verifier — inject task criteria, FILES_MODIFIED, codebaseContext, test commands, `evidencePath: .fractal-planner/plans/{planId}/evidence/task-{planTaskId}-verification.md`). Wait for result.
+6. Read evidence file (primary) or parse agent message (fallback).
 
-After all wave builders have completed (sent IMPLEMENTATION COMPLETE or timed out), spawn verification subagents for each completed task in the wave. Spawn all verifiers simultaneously (parallel Task calls in a single message).
+**If VERIFICATION PASSED:**
+- Add to `commitQueue`: `{ planTaskId, filesModified, builderName, iteration: iterationMap[planTaskId], nativeId }`
+- Send `VERIFICATION PASSED: {planTaskId}` to the builder (builder loops to claim next task)
 
-For each task in `currentWave` with a valid `IMPLEMENTATION COMPLETE` message:
+**If VERIFICATION FAILED:**
+- If `iterationMap[planTaskId] >= maxIterations`: go to Step 5.8.
+- Else: increment `iterationMap[planTaskId]`, send to builder:
+  ```
+  VERIFICATION FAILED: {planTaskId}
+  Iteration: {n}/{maxIterations}
 
-Extract FILES_MODIFIED from the builder's message.
+  {full VERIFICATION FAILED output from verifier}
 
-Spawn verifier (see Step 4.4 verifier spec), injecting:
-- Task criteria from the execution plan
-- FILES_MODIFIED from builder
-- codebaseContext from Step 2
-- Test commands from task metadata
-- `evidencePath`: `.fractal-planner/plans/{planId}/evidence/task-{id}-verification.md`
+  Fix all issues listed above, then send IMPLEMENTATION COMPLETE again.
+  ```
+  Builder retries in-place (no re-spawn).
 
-**Updated verifier instructions**: The verifier must also write an evidence file to `evidencePath` before returning its result. See reference.md for evidence file format.
+### 5.5: Handle CLARIFICATION NEEDED
 
-Wait for all verifier subagents to complete (parallel TaskOutput calls or wait for all to return). Collect results.
+1. Parse `planTaskId` and the question from the message.
+2. Identify sender `builderName`.
+3. Verify this is iteration 1 for this task (`iterationMap[planTaskId] == 1`) AND `clarificationsUsed[planTaskId]` is not true.
+   - If invalid: send `"Clarification only allowed on iteration 1. Proceed with the task spec and the failure report."` to the builder.
+4. If valid: parse the CLARIFICATION NEEDED message (see reference.md for format), call `AskUserQuestion`, then forward the answer:
+   ```
+   CLARIFICATION ANSWER: {planTaskId}
+   User selected: "{option}"
+   Context: {additional text if any}
+   ```
+5. Mark `clarificationsUsed[planTaskId] = true`.
 
-For each task in the wave, read the verification result from the evidence file (primary) or from the agent message (fallback):
-- **VERIFICATION PASSED**: Proceed to commit for this task
-- **VERIFICATION FAILED**: Store failure report; increment iteration. If `iteration > maxIterations` → Step 5.8 (failure handling). Else → queue for re-spawn in next iteration.
+### 5.6: Handle NO_MORE_TASKS
 
-### 5.5: Re-spawn Failed Builders (if any)
+1. Parse `builderName` from the message.
+2. Move `builderName` from `activeBuilders` to `idleBuilders`.
+3. Clear `builderTaskMap[builderName]`.
+4. If `activeBuilders` is empty AND `commitQueue` is empty: proceed to Step 6.
 
-If any tasks in the wave need re-tries:
-1. For each failed task: the task is already IN_PROGRESS from Step 5.2 — skip re-notifying tracker.
-2. Shut down the failed builder for that task.
-3. Spawn a fresh builder with failure context (iteration 2+ format from Step 5.3).
-4. Wait for IMPLEMENTATION COMPLETE.
-5. Spawn fresh verifier.
-6. Check result. If passes → proceed to commit. If fails and iterations exhausted → Step 5.8.
+### 5.7: Serialize Commits (process commitQueue)
 
-Loop until all tasks in the wave either pass verification or exhaust iterations.
+Process `commitQueue` one entry at a time, sorted by dependency order (dependencies first):
 
-### 5.6: Serialize Commits (in dependency order)
+For each entry in `commitQueue`:
+1. **Create git commit** — skip if `--no-commit` flag was set:
+   - Parse FILES_MODIFIED from the entry. If missing, log warning, set commit hash to `none`.
+   - Spawn committer teammate:
+     - Name: **committer-{planTaskId}**
+     - Tools: `Bash`, `Read`, `Grep`
+     - Instructions (inject `commitStyle` and `commitLang` from Step 4.2.5):
+       ```
+       You are a git commit specialist for the fp-impl-{planId} team.
 
-After all tasks in the wave have either passed verification or been handled as failures, commit the passed tasks **in dependency order** (one at a time — git index cannot handle parallel commits):
+       Follow the fp:commit skill instructions to create ONE git commit for this task.
 
-For each passed task in `currentWave` (sorted by dependency order, dependencies first):
-1. **Create git commit** (Step 5.7) — extract commit hash
+       TASK CONTEXT:
+       - Task ID: {planTaskId}
+       - Description: {description}
+
+       FILES_MODIFIED:
+       {paste the file list}
+
+       INSTRUCTIONS:
+       1. Use pre-detected commit style: {commitStyle} (detected from git history at session start)
+       2. Use pre-detected language: {commitLang}
+       3. Stage only these specific files
+       4. Create ONE commit with message based on task description, following the detected style
+       5. Report commit hash when done
+
+       Message me with "COMMIT COMPLETED" or "COMMIT FAILED" when finished.
+       ```
+   - Handle committer response:
+     - `COMMIT COMPLETED` → extract hash, log `✓ Task {planTaskId} committed as {hash}`
+     - `COMMIT FAILED` → use `AskUserQuestion` ("Git commit failed for task {planTaskId}: {error}. How should we proceed?" with options "Continue without committing" / "Stop execution"). If continuing, set hash to `none`.
+     - `COMMIT SKIPPED` → log skip reason, set hash to `none`
+   - Shut down committer.
+
 2. **Update native task status**:
    ```
    TaskUpdate(nativeId, status: "completed", metadata: {
@@ -508,52 +532,19 @@ For each passed task in `currentWave` (sorted by dependency order, dependencies 
    Commit: {hash or "none"}
    Summary: {brief description of what was implemented}
    ```
-4. Wait for `ACK_COMPLETED: {planTaskId}`
-5. Add plan task ID to `completedTasks`
-6. Shut down builder for this task
+4. Wait for `ACK_COMPLETED: {planTaskId}`.
+5. Add `planTaskId` to `completedTasks`.
+6. Clear `builderTaskMap[builderName]` for this entry.
+7. Remove entry from `commitQueue`.
 
-### 5.7: Create Git Commit (after verification passes)
-
-**Skip this entire substep if `--no-commit` flag was set in Step 1.**
-
-1. **Parse FILES_MODIFIED** from the builder's `IMPLEMENTATION COMPLETE` message (regex: `FILES_MODIFIED:\n(- .+\n)+`). If missing, log warning and skip commit — set commit hash to `none`.
-
-2. **Spawn committer teammate**:
-   - Name: **committer-{id}**
-   - Tools: `Bash`, `Read`, `Grep`
-   - Instructions (inject `commitStyle` and `commitLang` from Step 4.2.5):
-     ```
-     You are a git commit specialist for the fp-impl-{planId} team.
-
-     Follow the fp:commit skill instructions to create ONE git commit for this task.
-
-     TASK CONTEXT:
-     - Task ID: {id}
-     - Description: {description}
-
-     FILES_MODIFIED:
-     {paste the file list from builder's IMPLEMENTATION COMPLETE message}
-
-     INSTRUCTIONS:
-     1. Use pre-detected commit style: {commitStyle} (detected from git history at session start)
-     2. Use pre-detected language: {commitLang}
-     3. Stage only these specific files
-     4. Create ONE commit with message based on task description, following the detected style
-     5. Report commit hash when done
-
-     Message me with "COMMIT COMPLETED" or "COMMIT FAILED" when finished.
-     ```
-
-3. **Handle committer response**:
-   - `COMMIT COMPLETED` → extract hash, log `✓ Task {id} committed as {hash}`
-   - `COMMIT FAILED` → use `AskUserQuestion` ("Git commit failed for task {id}: {error}. How should we proceed?" with options "Continue without committing" / "Stop execution"). If continuing, set hash to `none`.
-   - `COMMIT SKIPPED` → log skip reason, set hash to `none`
-
-The commit hash flows to the native task update and tracker via Step 5.6.
+8. **Check for idle builder wake-up**: After each commit, call `TaskList()` to check for newly unblocked tasks (status: "pending", blockedBy: []). If found AND `idleBuilders` is non-empty:
+   - Pick an idle builder, move from `idleBuilders` to `activeBuilders`.
+   - Send: `TASKS_AVAILABLE\nNew tasks have been unblocked. Resume your self-claiming loop.`
 
 ### 5.8: On Max Iterations Reached
 
-When a builder has exhausted all iterations without passing verification:
+Triggered from Step 5.4 when `iterationMap[planTaskId] >= maxIterations` and verification fails.
+
 1. Log: "Task {planTaskId} FAILED after {maxIterations} iterations"
 2. Use `AskUserQuestion`:
    - Question: "Task {planTaskId} failed verification after {maxIterations} iterations. What would you like to do?"
@@ -577,30 +568,32 @@ When a builder has exhausted all iterations without passing verification:
       - Read `execution-state.json`, set `skippedTasks[depPlanId] = "Blocked by {planTaskId}"`, write back.
       - Send `TASK_SKIPPED: {depPlanId}\nReason: Blocked by {planTaskId}` to tracker, wait `ACK_SKIPPED: {depPlanId}`.
       - `skippedTasks.add(depPlanId)`
-   g. Shut down builder. Continue to next wave (loop back to Step 5.1).
+   g. Send `MAX_ITERATIONS_REACHED: {planTaskId}` to the builder (builder loops to next task).
+   h. Clear `builderTaskMap[builderName]`.
+   i. Return to Step 5.2 message-handling loop.
 4. **If Stop**:
    a. Perform steps 3a through 3f (mark failed + blocked dependents).
    b. Jump to Step 6.
 
-**After processing all tasks in a wave** (both passed and failed), loop back to Step 5.1 to compute the next wave. Continue until `currentWave` is empty and all tasks are handled.
-
 ## Step 6: Cleanup & Report
 
-After all tasks in the execution order have been iterated (or the user chose to stop):
+After all builders have finished (activeBuilders is empty, commitQueue is empty) or the user chose to stop:
 
 1. **Roll up parent statuses**: Send `ROLLUP_PARENTS` to the tracker. Wait for `ROLLUP_COMPLETE`. The tracker handles all Linear parent status updates.
 
-2. **Shut down tracker**: Send shutdown request to the tracker. Wait for confirmation.
+2. **Shut down all builders**: Send `shutdown_request` to each builder (both active and idle) via SendMessage. Wait for confirmations.
 
-3. **Clean up the team**: Delete team `fp-impl-{planId}`.
+3. **Shut down tracker**: Send shutdown request to the tracker. Wait for confirmation.
 
-4. **Build summary from native task system**: Call `TaskList()` to get final task states. For each `(planTaskId, nativeId)` in `taskMap`:
+4. **Clean up the team**: Delete team `fp-impl-{planId}`.
+
+5. **Build summary from native task system**: Call `TaskList()` to get final task states. For each `(planTaskId, nativeId)` in `taskMap`:
    - `status == "completed"` + `fpStatus == "COMPLETED"` (or absent) → COMPLETED (get iterations, commit from metadata)
    - `status == "completed"` + `fpStatus == "FAILED"` → FAILED (get reason from metadata or `executionState.failureReasons`)
    - `status == "deleted"` → SKIPPED (get reason from `executionState.skippedTasks[planTaskId]`)
    - `status == "in_progress"` or `status == "pending"` → INCOMPLETE (should not occur at end — warn)
 
-5. **Write final `progress.md` snapshot** (human-readable audit artifact — not a runtime source of truth):
+6. **Write final `progress.md` snapshot** (human-readable audit artifact — not a runtime source of truth):
    ```markdown
    # Implementation Progress (Final Snapshot)
 
@@ -623,7 +616,7 @@ After all tasks in the execution order have been iterated (or the user chose to 
    | 3 | {id} | {description} | SKIPPED | - | - | Blocked by {dep} |
    ```
 
-6. **Report to user**:
+7. **Report to user**:
    ```
    ## Implementation Summary ({planId})
 
@@ -661,20 +654,22 @@ See [reference.md](./reference.md) for:
 
 ## Important Notes
 
-- **Tracker is persistent**: The tracker teammate is spawned once and lives for the entire session. Builder is ephemeral per iteration.
+- **Builders are persistent**: Each builder-N teammate lives for the entire session, running a self-claiming work loop across multiple tasks. Verifiers are still spawned fresh per iteration.
+- **Builders drive scheduling**: Builders find and claim tasks via TaskList/TaskUpdate. The lead handles verification, commits, failures, and tracker communication.
+- **Builder tools**: Builders have TaskList, TaskUpdate, TaskGet, and SendMessage in addition to code tools. They use these for self-claiming, not for modifying other tasks' state.
+- **Self-claiming execution**: Builders self-organize via the native task list. `maxParallelTasks` determines the number of concurrent builders (default: 1 = sequential).
+- **Builders accumulate context**: Persistent builders retain knowledge across tasks within a session. Verifiers are still spawned fresh per iteration.
+- **Tracker is persistent**: The tracker teammate is spawned once and lives for the entire session.
 - **Tracker owns Linear**: The lead never calls `mcp__linear-server__update_issue` directly. All Linear updates go through the tracker.
 - **Tracker is stateless**: The tracker no longer reads or writes files. All state lives in its memory for the current session.
 - **Native task system owns execution state**: The lead uses TaskCreate/TaskList/TaskUpdate to manage task lifecycle. `execution-state.json` is the resume artifact.
 - **Resume is native-task-driven**: On resume, the lead reads `execution-state.json` for the `taskMap`, then calls `TaskList()` to get current statuses. No `progress.md` parsing.
 - **No native "failed" status**: Failed tasks get `status: "completed"` + `metadata.fpStatus: "FAILED"`. This auto-unblocks dependents in the native system, which the lead then immediately marks `deleted` (skipped).
-- **Skipped tasks use `deleted` status**: `deleted` tasks are invisible to `TaskList`, preventing them from appearing as ready in future waves.
+- **Skipped tasks use `deleted` status**: `deleted` tasks are invisible to `TaskList`, preventing builders from claiming them.
 - **Step 4.0 requires team context**: `TaskCreate` calls in Step 4.0 must happen after `TeamCreate` in Step 4, since they register tasks in the current team's task list.
-- **Codebase context injection**: The codebase context from Step 2 is injected into builder spawn instructions so it doesn't waste turns re-exploring the project.
-- **Fresh context per iteration**: Both builder AND verifier are spawned fresh for each iteration. No accumulated message history in either.
-- **Wave execution**: Multiple tasks execute in parallel per wave when `maxParallelTasks > 1`. Default is 1 (sequential). Wave width is capped at `maxParallelTasks`.
-- **Commits are always serialized**: Even with parallel builders/verifiers, commits happen one at a time in dependency order.
+- **Codebase context injection**: The codebase context from Step 2 is injected into builder spawn instructions so builders don't waste turns re-exploring the project.
+- **Commits are always serialized**: Even with parallel builders, commits happen one at a time in dependency order via the commitQueue.
 - **Real code only**: The builder must never produce stubs or placeholder implementations.
 - **Verification is lead-driven**: The lead spawns a fresh verification subagent (via Task tool) after each builder iteration. No hooks or persistent verifier teammate.
 - **User decides on failure**: When max iterations are reached, always ask the user.
-- **Lead drives execution**: The lead computes waves via `TaskList()`, spawns parallel builders, and decides what to do next. The tracker is a pure Linear relay.
 - **progress.md is generated once at Step 6**: Not a runtime artifact. Generated as a human-readable snapshot at the end.

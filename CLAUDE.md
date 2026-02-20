@@ -28,7 +28,7 @@ Run a single test file: `bun test src/__tests__/config.test.ts`
 ### Skills (Markdown prompts — not compiled TypeScript)
 
 - **`/fp:plan`** (`skills/fp/SKILL.md`) — Thin orchestrator that coordinates each phase: interview (agent team with lead-relay) → research → decomposition → planning → (Linear sync). Uses `resolve-env.sh` to resolve plugin root, CLI runner, CLI directory, and full merged config in a single bash call. Claude derives the plugin root from skill metadata context. CLI helpers (validate-tasks, generate-plan) also run as Claude-executed bash.
-- **`/fp:implement`** (`skills/implement/SKILL.md`) — Loads a plan by `planId`, spawns a persistent tracker teammate + ephemeral builder teammates with fresh verification subagents per iteration, executes leaf tasks in dependency order, handles commits, maintains `progress.md` for session resume, optionally syncs to Linear via the tracker.
+- **`/fp:implement`** (`skills/implement/SKILL.md`) — Loads a plan by `planId`, spawns a persistent tracker teammate + persistent builder teammates (self-claiming work loop) with lead-spawned fresh verification subagents per iteration, executes leaf tasks in dependency order, handles commits, optionally syncs to Linear via the tracker.
 - **`/fp:commit`** (`skills/commit/SKILL.md`) — Git commit with style detection (SEMANTIC/PLAIN/SHORT) and language detection (KOREAN/ENGLISH).
 
 ### Custom Agents (`agents/`)
@@ -78,13 +78,14 @@ Agents communicate via structured text messages.
 - Interviewer → Lead: `"CLEARANCE ACHIEVED\nArtifacts written to .fractal-planner/plans/{planId}/"`
 - Interviewer → Lead: `"DRAFT UPDATED (Round N)\nClearance: M/6 passed\nGaps: <list>"`
 
-**Builder/verification (implementation — lead-spawned verifier):**
-- Builder implements, messages lead with "IMPLEMENTATION COMPLETE" + FILES_MODIFIED
+**Builder/verification (implementation — self-claiming builders, lead-spawned verifier):**
+- Persistent builders run a self-claiming work loop: TaskList → TaskUpdate(claim) → TaskGet → implement
+- Builder messages lead with "TASK_CLAIMED" then "IMPLEMENTATION COMPLETE" + FILES_MODIFIED
 - Lead spawns fresh verification subagent (Task tool) per iteration
 - Verifier reads code, runs tests/typecheck, checks acceptance criteria
-- If pass: lead commits, moves to next task
-- If fail: lead re-spawns fresh builder with failure report
-- Both builder and verifier get fresh context every iteration
+- If pass: lead sends VERIFICATION PASSED, builder loops to claim next task
+- If fail: lead sends VERIFICATION FAILED, builder retries in-place (no re-spawn)
+- Verifiers get fresh context every iteration; builders accumulate context across tasks
 
 **Tracker (implementation progress):**
 - Lead → Tracker: `"TASK_STARTED: {id}"`, `"TASK_COMPLETED: {id}\nIterations: n/max\nCommit: hash\nSummary: text"`, `"TASK_FAILED: {id}\nIterations: n/max\nReason: text"`, `"TASK_SKIPPED: {id}\nReason: text"`, `"ROLLUP_PARENTS"`, `"GET_SUMMARY"`

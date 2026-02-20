@@ -154,7 +154,6 @@ The implementation lead loads codebase context using this fallback chain:
 The context is injected into:
 - Builder spawn instructions (so it knows the tech stack, patterns, and conventions)
 - Verification subagent prompt (so it knows what patterns to check against)
-- Each task message sent to the builder
 
 ## Native Task Format
 
@@ -167,7 +166,7 @@ The context is injected into:
 | `activeForm` | `Implementing [{planTaskId}]` |
 | `addBlockedBy` | Array of native task IDs for plan-level dependencies (only those already in `taskMap`) |
 
-The `owner` field is set on `TaskUpdate` when assigning a task to a builder (Step 5.2), for forward-compatibility with P3 tooling that reads `owner` from task JSON files.
+The `owner` field is set by the builder itself during the claim step (TaskUpdate), using its own name (e.g., `builder-1`). This naming convention enables P3 tooling that reads `owner` from task JSON files.
 
 ### Task Description Template
 
@@ -203,20 +202,64 @@ The `description` field of each native task holds the complete static builder pa
 {plan task IDs, or "none"}
 ```
 
-Do NOT include dynamic content (notepad entries, codebase context) in the native task description — those are injected fresh at builder spawn time.
+Do NOT include dynamic content (notepad entries, codebase context) in the native task description. Codebase context is injected at builder spawn time; notepad entries are read by the builder per-task from `notepad.md`.
 
 ### TaskUpdate Status Patterns
 
 | Scenario | `status` | `metadata` |
 |----------|----------|------------|
-| Task assigned to builder | `in_progress` | `{ owner: "builder-{planTaskId}" }` |
+| Task claimed by builder | `in_progress` | `{ owner: "builder-N" }` |
 | Verification passed + committed | `completed` | `{ fpStatus: "COMPLETED", iterations: "n/max", commit: "hash", summary: "text" }` |
 | Max iterations reached | `completed` | `{ fpStatus: "FAILED", iterations: "max/max", reason: "text" }` |
 | Blocked by failed dependency | `deleted` | `{ fpStatus: "SKIPPED", reason: "Blocked by {planTaskId}" }` |
 
 **Why `completed` for FAILED?** Native statuses are `pending`, `in_progress`, `completed`, `deleted`. Marking a failed task `completed` causes the native system to auto-clear `blockedBy` on its dependents. The lead then immediately marks those dependents `deleted` (SKIPPED) before the next `TaskList()` call. `metadata.fpStatus` is the authoritative status for FAILED vs COMPLETED tasks.
 
-**Why `deleted` for SKIPPED?** `deleted` tasks are invisible to `TaskList()`, preventing them from appearing as ready in future wave computations.
+**Why `deleted` for SKIPPED?** `deleted` tasks are invisible to `TaskList()`, preventing them from appearing as ready in future computations.
+
+## Self-Claiming Protocol
+
+### Overview
+
+Builders are persistent teammates that run a self-claiming work loop. Instead of the lead computing waves and assigning tasks, builders call `TaskList()` themselves, claim available tasks via `TaskUpdate(owner)`, and read task payloads via `TaskGet()`. The lead shrinks to: spawn builders, handle verification, serialize commits, manage failures.
+
+### Builder Naming Convention
+
+Builders are named `builder-1` through `builder-N` (where N = `maxParallelTasks`). The builder name matches the `owner` value set in native task JSON — this is critical for P3 forward-compatibility where the TeammateIdle hook reads `owner` from task files.
+
+### Claiming Rules
+
+- **One task at a time**: A builder must complete (or be told to move on from) its current task before claiming the next.
+- **Lowest ID first**: When multiple tasks are available, pick the one with the lowest native task ID.
+- **Race handling**: If two builders claim the same task (last-write-wins on `TaskUpdate`), the lead detects duplicate `TASK_CLAIMED` messages and tells the second builder `TASK_ALREADY_CLAIMED`.
+
+### Builder → Lead Messages
+
+| Message | When | Payload |
+|---------|------|---------|
+| `TASK_CLAIMED: {planTaskId}` | After claiming via TaskUpdate | `Builder: {builderName}`, `NativeId: {nativeTaskId}` |
+| `IMPLEMENTATION COMPLETE: {planTaskId}` | After finishing implementation | `FILES_MODIFIED:` list, optional `NOTEPAD_ENTRY:` |
+| `CLARIFICATION NEEDED: {planTaskId}` | Iteration 1, before IMPLEMENTATION COMPLETE | `QUESTION:`, `OPTIONS:`, `HEADER:`, `MULTI_SELECT:` |
+| `NO_MORE_TASKS: {builderName}` | When TaskList returns no claimable tasks | None |
+
+### Lead → Builder Messages
+
+| Message | When | Effect on Builder |
+|---------|------|-------------------|
+| `VERIFICATION PASSED: {planTaskId}` | After verifier passes | Builder loops to claim next task |
+| `VERIFICATION FAILED: {planTaskId}` | After verifier fails, iterations remain | Builder fixes issues and re-sends IMPLEMENTATION COMPLETE |
+| `MAX_ITERATIONS_REACHED: {planTaskId}` | After verifier fails, no iterations remain | Builder loops to claim next task |
+| `CLARIFICATION ANSWER: {planTaskId}` | After user answers clarification | Builder continues implementation |
+| `TASKS_AVAILABLE` | After commit unblocks new tasks | Idle builder resumes self-claiming loop |
+| `TASK_ALREADY_CLAIMED: {planTaskId}` | Duplicate claim detected | Builder loops to claim a different task |
+
+### TASK_CLAIMED Message Format
+
+```
+TASK_CLAIMED: {planTaskId}
+Builder: {builderName}
+NativeId: {nativeTaskId}
+```
 
 ## Execution State File
 
@@ -263,13 +306,13 @@ Do NOT include dynamic content (notepad entries, codebase context) in the native
 ### When Written vs. Updated
 
 - **Written once**: After all `TaskCreate` calls complete on a fresh run (Step 4.0)
-- **Updated incrementally**: `skippedTasks` and `failureReasons` are updated in-place during Steps 5.1 and 5.8 as tasks are skipped or fail
+- **Updated incrementally**: `skippedTasks` and `failureReasons` are updated in-place during Step 5.8 as tasks fail and their dependents are cascade-skipped
 
 The file is the sole resume artifact. On resume, the lead reads `taskMap` to map plan task IDs to native task IDs, then calls `TaskList()` to get current statuses.
 
 ## Communication Protocol Summary
 
-### Standard Flow (lead-driven with verification subagent)
+### Standard Flow (self-claiming with verification subagent)
 
 ```
 Team-Lead creates team fp-impl-{planId}
@@ -279,35 +322,36 @@ Team-Lead ──INIT──> Tracker (LINEAR_MAPPING only)
 Tracker parses linearMapping into memory
 Tracker ──TRACKER READY──> Team-Lead
 
-Team-Lead calls TaskList() → computes ready wave
-  For each task in wave:
-    TaskUpdate(nativeId, in_progress, owner: "builder-{id}")
-    TASK_STARTED: {id} → Tracker
-    Tracker ──ACK_STARTED──> Team-Lead (+ Linear in-progress)
-Team-Lead spawns fresh Builder
-Team-Lead ──task payload──> Builder: single task with id, description, criteria
-Builder implements → messages lead: IMPLEMENTATION COMPLETE with FILES_MODIFIED
-Builder goes idle
+Team-Lead spawns builder-1..builder-N (persistent)
+Builder: TaskList() → finds pending task with empty blockedBy
+Builder: TaskUpdate(taskId, in_progress, owner: "builder-N") → claims task
+Builder: TaskGet(taskId) → reads full task spec
+Builder ──TASK_CLAIMED: {id}──> Team-Lead
+Team-Lead ──TASK_STARTED: {id}──> Tracker
+Tracker ──ACK_STARTED: {id}──> Team-Lead
+Builder implements → IMPLEMENTATION COMPLETE: {id} with FILES_MODIFIED
 Team-Lead spawns Verifier subagent (Task tool):
   Reads modified files, runs tests, checks criteria
   Returns VERIFICATION PASSED or VERIFICATION FAILED
-If PASSED → proceed to commit
-If FAILED → re-spawn fresh builder (up to maxIterations)
-Team-Lead ──task──> Committer: "Create commit for task {id} with files: ..."
-Committer ──commit──> Team-Lead: "COMMIT COMPLETED\nTask: {id}\nHash: abc1234"
-TaskUpdate(nativeId, completed, fpStatus: "COMPLETED", commit: hash)
-Team-Lead ──TASK_COMPLETED: {id}──> Tracker (+ Linear review/completed)
-Tracker ──ACK_COMPLETED: {id}──> Team-Lead
-Team-Lead adds task to completedTasks
-Team-Lead shuts down builder, committer
-  Loop back to TaskList() → next wave
-When all tasks handled → Step 6 (Cleanup)
+If PASSED:
+  Team-Lead ──VERIFICATION PASSED: {id}──> Builder (loops to claim next)
+  Team-Lead adds to commitQueue → processes commit
+  Team-Lead ──task──> Committer → COMMIT COMPLETED
+  TaskUpdate(nativeId, completed, fpStatus: "COMPLETED", commit: hash)
+  Team-Lead ──TASK_COMPLETED: {id}──> Tracker
+  Tracker ──ACK_COMPLETED: {id}──> Team-Lead
+If FAILED (iterations remain):
+  Team-Lead ──VERIFICATION FAILED: {id}──> Builder (retries in-place)
+No tasks available:
+  Builder ──NO_MORE_TASKS──> Team-Lead
+  Later: commit unblocks tasks → Team-Lead ──TASKS_AVAILABLE──> idle Builder
+All done → Step 6 (shutdown builders, tracker, delete team)
 ```
 
 ### Failure Flow
 
 ```
-Builder exhausts iteration attempts without passing verification
+Builder retries exhaust all iterations without passing verification
 Team-Lead ──ask──> User: "Task {id} failed. Continue or stop?"
 TaskUpdate(nativeId, status: "completed", fpStatus: "FAILED")  ← auto-unblocks dependents
 Update execution-state.json failureReasons
@@ -319,6 +363,7 @@ For each blocked dependent:
   Update execution-state.json skippedTasks
   Team-Lead ──TASK_SKIPPED: {blocked_id}\nReason: Blocked by {id}──> Tracker
   Tracker ──ACK_SKIPPED: {blocked_id}──> Team-Lead
+Team-Lead ──MAX_ITERATIONS_REACHED: {id}──> Builder (loops to next task)
 ```
 
 ### FILES_MODIFIED Message Format
@@ -389,7 +434,7 @@ During implementation, the **tracker teammate** (not the team-lead or builder) u
 
 | Event | Linear Status Update |
 |-------|---------------------|
-| Task assigned to builder | `in-progress` |
+| Task claimed by builder | `in-progress` |
 | Verification passed | `review` |
 | Task failed (max iterations) | `failed` |
 | Task skipped (blocked dep) | (no change) |
@@ -435,7 +480,7 @@ The `fp-task-tracker` teammate handles Linear sync. The team lead communicates w
 | Command | When | Payload |
 |---------|------|---------|
 | `INIT` | At spawn | `LINEAR_MAPPING:` section with JSON or `"null"` |
-| `TASK_STARTED: {id}` | Before spawning builder | None |
+| `TASK_STARTED: {id}` | After builder claims task | None |
 | `TASK_COMPLETED: {id}` | After verification + commit | `Iterations: n/max`, `Commit: hash`, `Summary: text` |
 | `TASK_FAILED: {id}` | After max iterations | `Iterations: n/max`, `Reason: text` |
 | `TASK_SKIPPED: {id}` | Dep failed/skipped | `Reason: text` |
@@ -487,50 +532,41 @@ Reason: Criterion 2 (error handling) consistently fails — catch block not trig
 ACK_FAILED: 1.3
 ```
 
-## Wave Execution Protocol
+## Self-Claiming Execution Protocol
 
-When `maxParallelTasks > 1`, tasks are grouped into waves for parallel execution.
-
-### Wave Formation
-
-A wave is computed dynamically at the start of each iteration via `TaskList()`:
-- Call `TaskList()` → get all tasks in the team
-- Ready tasks: those with `status == "pending"` and `blockedBy == []`
-- Additional check: for each ready task, verify no plan-level dependency has `fpStatus: "FAILED"` or `status: "deleted"` (handles resume edge cases)
-- Wave = ready tasks (up to `maxParallelTasks` count)
-
-### Wave Execution Flow
-
-```
-Lead calls TaskList() → readyNative (pending, no blockedBy)
-  → Detects any "falsely ready" tasks (dep was FAILED, auto-unblocked)
-  → Marks those TaskUpdate(deleted, SKIPPED), sends TASK_SKIPPED to tracker
-  → Forms currentWave = remaining readyNative[:maxParallelTasks]
-Lead: TaskUpdate(in_progress, owner) + TASK_STARTED to tracker for each wave task
-  → Waits for all ACK_STARTED responses
-Lead spawns one builder per wave task (parallel Task spawns)
-  → Sends task payload to each builder simultaneously
-Lead waits for all IMPLEMENTATION COMPLETE messages
-Lead spawns one verifier per completed builder (parallel Task spawns)
-  → Each verifier writes evidence file + returns PASS/FAIL
-Lead serializes commits (one at a time, in dependency order):
-  → TaskUpdate(completed, COMPLETED) + TASK_COMPLETED to tracker
-  → Spawns committer for first task → waits → ACK_COMPLETED
-  → Spawns committer for next task → waits → ACK_COMPLETED
-  → ...
-Lead handles failures (max iterations reached) via AskUserQuestion
-Lead loops back to TaskList() for next wave
-```
+Builders self-organize via the native task list. The lead's role is verification, commits, failure handling, and tracker communication.
 
 ### Sequential Mode (maxParallelTasks = 1)
 
-When `maxParallelTasks = 1` (the default), wave execution degenerates to sequential: each wave has exactly one task, producing identical behavior to the original single-task loop.
+A single `builder-1` runs the self-claiming loop. Behavior is equivalent to the previous wave-of-1: tasks execute one at a time in dependency order. No race conditions possible.
 
-### Wave Failure Handling
+### Parallel Mode (maxParallelTasks > 1)
 
-- If any task in a wave fails verification and exhausts iterations: ask user Continue/Stop
-- If Continue: mark failed (TaskUpdate completed+FAILED), compute blocked dependents, mark deleted+SKIPPED for each
-- Commits for OTHER passed tasks in the same wave: still committed normally
+N builders (`builder-1` through `builder-N`) claim tasks independently. The native `blockedBy` system ensures dependency ordering — builders can only see tasks whose dependencies are all completed. Multiple builders may work on independent tasks simultaneously.
+
+### Race Condition Handling
+
+If two builders call `TaskUpdate(taskId, in_progress, owner)` on the same task, last-write-wins — both builders think they claimed it. The lead detects the race when it receives two `TASK_CLAIMED` messages for the same `planTaskId`:
+1. First `TASK_CLAIMED` is accepted normally (recorded in `builderTaskMap`).
+2. Second `TASK_CLAIMED` for the same `planTaskId` triggers: lead sends `TASK_ALREADY_CLAIMED: {planTaskId}` to the second builder.
+3. The second builder loops back to `TaskList()` and claims a different task.
+
+### Task Unblocking
+
+After each commit in Step 5.7, the lead calls `TaskList()` to check for newly available tasks (status: "pending", blockedBy: []). If new tasks appear and idle builders exist:
+- Lead picks an idle builder, moves it from `idleBuilders` to `activeBuilders`.
+- Lead sends `TASKS_AVAILABLE` to wake the builder, which resumes its self-claiming loop.
+
+### Commit Serialization
+
+Unchanged from previous protocol — the `commitQueue` is processed one entry at a time in dependency order. Git index cannot handle parallel commits.
+
+### Failure Handling
+
+- Builder retries in-place when verification fails (no re-spawn).
+- When max iterations reached: lead asks user Continue/Stop.
+- If Continue: mark failed (TaskUpdate completed+FAILED), compute blocked dependents, mark deleted+SKIPPED for each. Send `MAX_ITERATIONS_REACHED` to builder — builder loops to next task.
+- Other builders are unaffected and continue their self-claiming loops during failure handling.
 
 ---
 
@@ -579,10 +615,9 @@ Started: {ISO timestamp}
 
 ### Injection Rules
 
-The lead injects notepad entries into builder payloads using this filter:
+Builders read `notepad.md` themselves as part of the self-claiming loop (Step 4.4, loop step 6). The relevance filter:
 - Include an entry if: it's in the **last 10 entries** overall, OR the task that wrote it had overlapping `filesToModify` with the current task
-- Inject as a `## Shared Notepad` section prepended before the task spec
-- Cap at 10 entries per builder to limit prompt growth
+- Cap at 10 entries per task to limit context growth
 
 ---
 
@@ -627,7 +662,7 @@ Task: {description}
 ### Lead Behavior with Evidence Files
 
 - Lead reads the evidence file (not just the agent message) to extract `Result: PASS | FAIL`
-- On resume: evidence files from the previous session provide failure context for re-spawned builders
+- On resume: evidence files from the previous session provide failure context for builders retrying tasks
 - In `fp:status` output: evidence files are linked for FAILED tasks
 
 ---
@@ -672,4 +707,4 @@ MULTI_SELECT: false
 
 - 1 clarification maximum per task, iteration 1 only
 - Subsequent iterations: lead rejects with "Proceed with failure report and task spec only"
-- In wave mode: clarification requests are processed one at a time (AskUserQuestion is sequential)
+- In parallel mode: clarification requests are processed one at a time (AskUserQuestion is sequential)
