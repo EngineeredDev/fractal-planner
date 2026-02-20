@@ -397,9 +397,11 @@ interview.md (human-readable summary):
 
 ### Step 5c: Relay Loop
 
+**CRITICAL — Idle notifications are EXPECTED and MUST be ignored.** The agent team framework automatically sends an idle notification after every teammate turn. These are NOT errors, NOT signs of stalling, and NOT signals that the interviewer is done. The interviewer processes your response (reads draft, updates it, evaluates clearance, composes next questions) and then goes idle while waiting for your next message — this is completely normal.
+
 You are now the relay between the interviewer and the user. Follow this protocol:
 
-1. **Wait for messages** from the interviewer — they are delivered automatically, no polling needed.
+1. **Wait for protocol messages** from the interviewer (QUESTIONS, DRAFT UPDATED, CLEARANCE ACHIEVED, or ERROR) — they are delivered automatically, no polling needed. **Ignore any idle notifications while waiting.**
 
 2. **On `QUESTIONS:` message**: Parse all question blocks (Q1 through Q4) from the structured content:
    - For each `QN:` block, extract: question text, options (label | description), header, multi-select flag
@@ -413,14 +415,17 @@ You are now the relay between the interviewer and the user. Follow this protocol
        content: "USER RESPONSE:\n\nQ1: User selected: \"<option>\"\nAdditional context: <text>\n\nQ2: User selected: \"<option>\"\nAdditional context: <text>"
      )
      ```
+   - After sending, **wait patiently** for the interviewer's next protocol message. You WILL see idle notifications during this time as the interviewer processes the response — this is normal. Do NOT react to them.
 
-3. **On `DRAFT UPDATED` message**: Informational only — no action needed. You may briefly note the clearance status if useful.
+3. **On `DRAFT UPDATED` message**: Informational only — no action needed. You may briefly note the clearance status if useful. **Continue waiting** for the next QUESTIONS or CLEARANCE ACHIEVED message.
 
 4. **On `CLEARANCE ACHIEVED` message**: Exit the relay loop, proceed to Step 5d.
 
 5. **On `ERROR:` message**: Report the error to the user and stop.
 
-6. **Safety limit**: If you've relayed 30 round trips without clearance, warn the user and proceed to Step 5d anyway.
+6. **On any other message (including idle notifications)**: Ignore it completely. Do not respond, do not exit the loop. Continue waiting for the next protocol message (QUESTIONS, DRAFT UPDATED, CLEARANCE ACHIEVED, or ERROR).
+
+7. **Safety limit**: If you've relayed 30 round trips without clearance, warn the user and proceed to Step 5d anyway.
 
 ### Step 5d: Interview Cleanup
 

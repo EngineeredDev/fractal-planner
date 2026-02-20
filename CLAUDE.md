@@ -77,6 +77,7 @@ Agents communicate via structured text messages.
 - Lead → Interviewer: `"USER RESPONSE:\n\nQ1: User selected: \"<option>\"\nAdditional context: <text>\n\nQ2: User selected: \"<option>\"\nAdditional context: <text>"`
 - Interviewer → Lead: `"CLEARANCE ACHIEVED\nArtifacts written to .fractal-planner/plans/{planId}/"`
 - Interviewer → Lead: `"DRAFT UPDATED (Round N)\nClearance: M/6 passed\nGaps: <list>"`
+- **Idle notifications**: The lead receives automatic idle notifications after every interviewer turn — these are expected and must be ignored. The lead should only react to the four protocol messages above.
 
 **Builder/verification (implementation — self-claiming builders, lead-spawned verifier):**
 - Persistent builders run a self-claiming work loop: TaskList → TaskUpdate(claim) → TaskGet → implement
@@ -156,13 +157,18 @@ Or via env vars (take priority): `COMMENT_CHECKER_DISABLED=1`, `COMMENT_CHECKER_
 
 ## Nudge Mechanism (TeammateIdle Hook)
 
-A TeammateIdle hook (`hooks/nudge-builder.sh`) that detects when builder teammates stall
-during `fp:implement` sessions and re-injects continuation prompts. Fires for all teammates;
-the script filters to only `builder-*` on `fp-impl-*` teams.
+A TeammateIdle hook (`hooks/nudge-teammate.sh`) that detects stalled teammates and re-injects
+continuation prompts. Handles two teammate types:
 
-Reads native task files from `~/.claude/tasks/{team_name}/` to find in_progress tasks owned
-by the idle builder. If found, increments a retry counter and exits 2 with a task-specific
-continuation prompt. After `maxRetries` (default 3), gives up.
+- **Builders** (`builder-*` on `fp-impl-*` teams): Reads native task files from
+  `~/.claude/tasks/{team_name}/` to find in_progress tasks owned by the idle builder.
+  If found, increments a retry counter and exits 2 with a task-specific continuation prompt.
+- **Interviewer** (`interviewer` on `fp-interview-*` teams): Uses consecutive idle event
+  counting (no task system scan). If the interviewer stalls without sending a protocol
+  message (QUESTIONS, DRAFT UPDATED, or CLEARANCE ACHIEVED), fires a continuation prompt
+  reminding it to complete the mandatory draft update loop.
+
+Both paths use the same retry counter mechanism. After `maxRetries` (default 3), gives up.
 
 Configure via `.fractal-planner/config.json`:
 
