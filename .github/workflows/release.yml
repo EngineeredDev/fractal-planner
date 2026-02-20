@@ -13,6 +13,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Verify version consistency
+        run: |
+          TAG_VERSION="${GITHUB_REF#refs/tags/v}"
+          PKG_VERSION=$(jq -r '.version' package.json)
+          PLUGIN_VERSION=$(jq -r '.version' .claude-plugin/plugin.json)
+          echo "Tag: $TAG_VERSION | package.json: $PKG_VERSION | plugin.json: $PLUGIN_VERSION"
+          if [[ "$TAG_VERSION" != "$PKG_VERSION" ]]; then
+            echo "::error::Tag version ($TAG_VERSION) does not match package.json ($PKG_VERSION)"
+            exit 1
+          fi
+          if [[ "$TAG_VERSION" != "$PLUGIN_VERSION" ]]; then
+            echo "::error::Tag version ($TAG_VERSION) does not match plugin.json ($PLUGIN_VERSION)"
+            exit 1
+          fi
+
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest

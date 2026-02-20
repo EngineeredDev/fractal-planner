@@ -208,14 +208,27 @@ Claude Code shows:
    - Verify `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=true`
    - Check Claude Code version >= 2.1.32
 
-## Publishing (Future)
+## Releasing
 
-When ready to publish to the Claude plugin registry:
+Use the release script to bump the version, generate a changelog, and create a tagged commit:
 
-1. Update version in `package.json` and `.claude-plugin/plugin.json`
-2. Build: `npm run build`
-3. Test thoroughly
-4. Publish: `npm publish` (or via Claude plugin registry)
+```bash
+bun run release 0.2.0    # or: ./scripts/release.sh 0.2.0
+```
+
+The script:
+1. Validates semver format and clean working tree
+2. Updates version in `package.json` and `.claude-plugin/plugin.json`
+3. Generates a changelog entry from conventional commits since the last tag
+4. Runs `bun run lint && bun run typecheck && bun test`
+5. Commits and creates git tag `v0.2.0`
+6. Prints the push command (does not auto-push)
+
+```bash
+git push origin main --tags   # triggers the release workflow → npm publish
+```
+
+The CI release workflow (`.github/workflows/release.yml`) validates that the tag version matches both JSON files before publishing.
 
 ## Resources
 

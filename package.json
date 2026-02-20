@@ -39,7 +39,8 @@
     "test": "bun test",
     "test:watch": "bun test --watch",
     "test:coverage": "bun test --coverage",
-    "prepublishOnly": "bun run clean && bun run build"
+    "prepublishOnly": "bun run clean && bun run build",
+    "release": "bash scripts/release.sh"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.39",

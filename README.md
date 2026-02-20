@@ -224,11 +224,13 @@ bun run clean          # Remove dist/ and stray compiled files
 ### Release
 
 ```bash
-# Bump version in package.json, plugin.json, and marketplace.json
-# Commit and tag
-git tag v0.1.0
-git push origin main --tags
-# CI runs checks, then the release workflow publishes to npm
+bun run release 0.2.0    # or: ./scripts/release.sh 0.2.0
+```
+
+The release script validates semver, updates `package.json` and `plugin.json`, generates a changelog entry from conventional commits, runs lint/typecheck/tests, commits, and creates a git tag. It prints the push command for a final review before publishing:
+
+```bash
+git push origin main --tags   # triggers CI → npm publish
 ```
 
 ## License
