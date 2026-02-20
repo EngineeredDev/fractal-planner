@@ -277,9 +277,12 @@ Repeat the following loop until no tasks remain:
    - PATTERN: description (only if you discovered something useful)"
    Include ALL files you created or modified. Use absolute paths.
    NOTEPAD_ENTRY is optional — only include if you discovered something genuinely useful.
-10. Wait for lead response:
+   THIS MUST BE YOUR LAST TOOL CALL FOR THIS TURN. Do not call any other tool after SendMessage.
+10. YOUR TURN ENDS HERE. The SendMessage in step 9 must be the last tool call of your turn.
+    The lead's response will arrive as the START of your next turn. When your next turn begins,
+    read the lead's message and act accordingly:
     - "VERIFICATION PASSED: {planTaskId}" → loop back to step 1
-    - "VERIFICATION FAILED: {planTaskId}\n..." → fix the issues described, then re-send IMPLEMENTATION COMPLETE
+    - "VERIFICATION FAILED: {planTaskId}\n..." → fix the issues described, then re-send IMPLEMENTATION COMPLETE (which again ends your turn)
     - "MAX_ITERATIONS_REACHED: {planTaskId}" → loop back to step 1
     - "TASK_ALREADY_CLAIMED: {planTaskId}" → loop back to step 1
 
@@ -292,7 +295,20 @@ IMPLEMENTATION RULES:
 - If the task has "MUST NOT DO" constraints, treat them as hard constraints — violating them will fail verification.
 - Track which files you modify (every Write/Edit/creation operation).
 - Never claim more than one task at a time.
-- Always wait for the lead's verification response before claiming the next task.
+- After sending IMPLEMENTATION COMPLETE, your turn MUST end — do not call any other tool. The lead's verification response arrives as your next turn.
+
+TURN PROTOCOL (strict termination rules):
+Every turn MUST end with exactly one of these SendMessage calls — no tool calls after it:
+1. "IMPLEMENTATION COMPLETE: {planTaskId}" (step 9 — awaiting verification)
+2. "CLARIFICATION NEEDED: {planTaskId}" (asking lead to relay a question)
+3. "NO_MORE_TASKS: {builderName}" (no claimable tasks — going idle)
+4. "TASK_CLAIMED: {planTaskId}" is the ONE exception — continue to step 8 on the same turn.
+
+Forbidden actions after sending IMPLEMENTATION COMPLETE:
+- Do NOT call TaskList(), TaskGet(), or TaskUpdate()
+- Do NOT call Read, Write, Edit, Bash, Glob, or Grep
+- Do NOT send another SendMessage
+Your turn must end immediately after the SendMessage for IMPLEMENTATION COMPLETE.
 
 NUDGE RECOVERY (automatic re-injection):
 If you receive a message about stalling or idle detection, it means you went idle while still
@@ -309,7 +325,8 @@ QUESTION: {question}
 OPTIONS:
 - {label} | {description}
 ..."
-Wait for CLARIFICATION ANSWER before continuing implementation.
+YOUR TURN ENDS HERE after sending CLARIFICATION NEEDED. Do not call any other tool.
+The CLARIFICATION ANSWER will arrive as the start of your next turn. Then continue implementation.
 
 PEER COMMUNICATION (parallel mode only — skip if peerBuilderNames is "none"):
 Budget: 2 peer messages max per task. Do NOT exceed this.
@@ -534,6 +551,7 @@ If activeBuilders is empty AND commitQueue is empty:
   {full VERIFICATION FAILED output from verifier}
 
   Fix all issues listed above, then send IMPLEMENTATION COMPLETE again.
+  Remember: IMPLEMENTATION COMPLETE must be your last tool call — your turn ends after sending it.
   ```
   Builder retries in-place (no re-spawn).
 
