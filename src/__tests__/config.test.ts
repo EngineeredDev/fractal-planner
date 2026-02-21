@@ -275,6 +275,53 @@ describe('Config loading system', () => {
       });
       expect(config.linear.statusMap?.review).toBeUndefined();
     });
+
+    test('partial statusMap with only review is valid', async () => {
+      resetConfig();
+      const config = await loadConfig({
+        linear: {
+          enabled: true,
+          teamId: 'team-123',
+          statusMap: {
+            review: 'Code Review'
+          }
+        }
+      });
+      expect(config.linear.statusMap?.review).toBe('Code Review');
+      expect(config.linear.statusMap?.pending).toBeUndefined();
+      expect(config.linear.statusMap?.completed).toBeUndefined();
+    });
+
+    test('partial statusMap with only pending and completed is valid', async () => {
+      resetConfig();
+      const config = await loadConfig({
+        linear: {
+          enabled: true,
+          teamId: 'team-123',
+          statusMap: {
+            pending: 'Backlog',
+            completed: 'Code Complete'
+          }
+        }
+      });
+      expect(config.linear.statusMap?.pending).toBe('Backlog');
+      expect(config.linear.statusMap?.completed).toBe('Code Complete');
+      expect(config.linear.statusMap?.['in-progress']).toBeUndefined();
+      expect(config.linear.statusMap?.failed).toBeUndefined();
+    });
+
+    test('empty statusMap is valid', async () => {
+      resetConfig();
+      const config = await loadConfig({
+        linear: {
+          enabled: true,
+          teamId: 'team-123',
+          statusMap: {}
+        }
+      });
+      expect(config.linear.statusMap).toBeDefined();
+      expect(config.linear.statusMap?.pending).toBeUndefined();
+    });
   });
 
   describe('userId field integration', () => {

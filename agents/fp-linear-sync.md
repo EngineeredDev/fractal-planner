@@ -29,7 +29,7 @@ Call `mcp__linear-server__list_teams` as a health check. If it fails, report the
 
 Call `mcp__linear-server__list_issue_statuses` for the configured `teamId`.
 
-**If `statusMap` is configured**: Match each status name against the team's available statuses by name. Fall back to auto-detect for any that don't match, with a warning. For `review`: if `statusMap.review` is set, match by name; if not set, auto-detect by name ("In Review", case-insensitive), falling back to the resolved `completed` UUID.
+**If `statusMap` is configured**: For each status key, if a name is provided, match it against the team's available statuses by name. If a key is not provided (undefined) or the provided name doesn't match any available status, fall back to auto-detect for that status (with a warning for non-matches). For `review`: if `statusMap.review` is set, match by name; if not set, auto-detect by name ("In Review", case-insensitive), falling back to the resolved `completed` UUID.
 
 **If `statusMap` is NOT configured** (default): Auto-detect by status **type**:
 - `pending` -> first status of type `backlog` (or `unstarted` if no backlog)

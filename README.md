@@ -195,7 +195,7 @@ Then add to `.fractal-planner/config.json`:
 
 **What happens:**
 - During `/fp:plan`: Issues are created mirroring the task tree. A `linear-mapping.json` is saved with plan artifacts.
-- During `/fp:implement`: Issues move through statuses as builders work. Comments are posted with verification results. Parent issues roll up from children.
+- During `/fp:implement`: Issues move through statuses as builders work. Parent issues roll up from children. By default, completed tasks move to "In Review" (falling back to "Done"). You can override this with `statusMap.review` — recommended names: "Committed", "Code Complete", or "Implemented".
 - If the Linear MCP server isn't connected, everything works normally — sync is skipped with a warning.
 
 ## How It Works

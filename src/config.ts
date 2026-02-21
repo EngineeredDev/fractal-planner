@@ -22,10 +22,10 @@ export const LinearConfigSchema = z.object({
   projectId: z.string().optional(),
   userId:    z.string().optional(),
   statusMap: z.object({
-    pending:         z.string(),
-    'in-progress':   z.string(),
-    completed:       z.string(),
-    failed:          z.string(),
+    pending:         z.string().optional(),
+    'in-progress':   z.string().optional(),
+    completed:       z.string().optional(),
+    failed:          z.string().optional(),
     review:          z.string().optional(),
   }).optional(),
 });
