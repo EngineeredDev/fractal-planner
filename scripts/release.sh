@@ -79,23 +79,32 @@ PERFORMANCE=""
 TESTS=""
 OTHER=""
 
+# Regex patterns stored in variables to avoid bash parser issues with ) in [[ =~ ]]
+re_feat='^feat(\([^)]*\))?:[[:space:]](.+)$'
+re_fix='^fix(\([^)]*\))?:[[:space:]](.+)$'
+re_docs='^docs(\([^)]*\))?:[[:space:]](.+)$'
+re_refactor='^refactor(\([^)]*\))?:[[:space:]](.+)$'
+re_perf='^perf(\([^)]*\))?:[[:space:]](.+)$'
+re_test='^test(\([^)]*\))?:[[:space:]](.+)$'
+re_skip='^(chore|build|ci)(\([^)]*\))?:[[:space:]](.+)$'
+
 while IFS= read -r line; do
   [[ -z "$line" ]] && continue
 
   # Strip conventional commit prefix and optional scope
-  if [[ "$line" =~ ^feat(\([^)]*\))?:\ (.+)$ ]]; then
+  if [[ "$line" =~ $re_feat ]]; then
     FEATURES+="- ${BASH_REMATCH[2]}"$'\n'
-  elif [[ "$line" =~ ^fix(\([^)]*\))?:\ (.+)$ ]]; then
+  elif [[ "$line" =~ $re_fix ]]; then
     FIXES+="- ${BASH_REMATCH[2]}"$'\n'
-  elif [[ "$line" =~ ^docs(\([^)]*\))?:\ (.+)$ ]]; then
+  elif [[ "$line" =~ $re_docs ]]; then
     DOCS+="- ${BASH_REMATCH[2]}"$'\n'
-  elif [[ "$line" =~ ^refactor(\([^)]*\))?:\ (.+)$ ]]; then
+  elif [[ "$line" =~ $re_refactor ]]; then
     REFACTORING+="- ${BASH_REMATCH[2]}"$'\n'
-  elif [[ "$line" =~ ^perf(\([^)]*\))?:\ (.+)$ ]]; then
+  elif [[ "$line" =~ $re_perf ]]; then
     PERFORMANCE+="- ${BASH_REMATCH[2]}"$'\n'
-  elif [[ "$line" =~ ^test(\([^)]*\))?:\ (.+)$ ]]; then
+  elif [[ "$line" =~ $re_test ]]; then
     TESTS+="- ${BASH_REMATCH[2]}"$'\n'
-  elif [[ "$line" =~ ^(chore|build|ci)(\([^)]*\))?:\ (.+)$ ]]; then
+  elif [[ "$line" =~ $re_skip ]]; then
     # Skip chore, build, ci
     continue
   else
