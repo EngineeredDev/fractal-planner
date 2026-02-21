@@ -455,7 +455,7 @@ Task(
   subagent_type: "fp-researcher",
   description: "Codebase research for planned feature",
   run_in_background: true,
-  mode: "acceptEdits",
+  mode: "bypassPermissions",
   prompt: "Research the codebase for the following planned feature.
 
 Goal: <goal text>
@@ -482,7 +482,7 @@ Task(
   subagent_type: "fp-context-builder",
   description: "Build codebase context summary",
   run_in_background: true,
-  mode: "acceptEdits",
+  mode: "bypassPermissions",
   prompt: "Build a static codebase context summary.
 
 Plan directory: .fractal-planner/plans/<planId>

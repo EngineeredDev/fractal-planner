@@ -79,11 +79,12 @@ try:
   internal=t.get('metadata',{}).get('_internal',False)
   task_id=t.get('id','')
   subject=t.get('subject','')
-  print(f'{status}|{owner}|{internal}|{task_id}|{subject}')
-except: print('||||')
-" 2>/dev/null || echo "||||")
+  fp_status=t.get('metadata',{}).get('fpStatus','')
+  print(f'{status}|{owner}|{internal}|{task_id}|{subject}|{fp_status}')
+except: print('|||||')
+" 2>/dev/null || echo "|||||")
 
-    IFS='|' read -r T_STATUS T_OWNER T_INTERNAL T_ID T_SUBJECT <<< "$TASK_INFO"
+    IFS='|' read -r T_STATUS T_OWNER T_INTERNAL T_ID T_SUBJECT T_FP_STATUS <<< "$TASK_INFO"
 
     if [[ "$T_STATUS" == "in_progress" ]] && [[ "$T_OWNER" == "$TEAMMATE_NAME" ]] && [[ "$T_INTERNAL" != "True" ]]; then
       MATCHED_NATIVE_ID="$T_ID"
@@ -93,6 +94,7 @@ s=sys.stdin.read().strip()
 m=re.match(r'\[([^\]]+)\]',s)
 print(m.group(1) if m else '')
 " 2>/dev/null || echo "")
+      MATCHED_FP_STATUS="$T_FP_STATUS"
       MATCHED_TASK="$TASK_FILE"
       break
     fi
@@ -100,6 +102,11 @@ print(m.group(1) if m else '')
 
   if [[ -z "$MATCHED_TASK" ]]; then
     rm -f "$STATE_FILE"
+    exit 0
+  fi
+
+  # Builder is waiting for lead's verification response — not stalled
+  if [[ "$MATCHED_FP_STATUS" == "AWAITING_VERIFICATION" ]]; then
     exit 0
   fi
 

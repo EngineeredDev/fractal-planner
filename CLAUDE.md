@@ -160,7 +160,9 @@ continuation prompts. Handles two teammate types:
 
 - **Builders** (`builder-*` on `fp-impl-*` teams): Reads native task files from
   `~/.claude/tasks/{team_name}/` to find in_progress tasks owned by the idle builder.
-  If found, increments a retry counter and exits 2 with a task-specific continuation prompt.
+  Respects `fpStatus: "AWAITING_VERIFICATION"` in task metadata — builders waiting for
+  the lead's verification response are not nudged (exit 0). Otherwise, if an in_progress
+  task is found, increments a retry counter and exits 2 with a task-specific continuation prompt.
 - **Interviewer** (`interviewer` on `fp-interview-*` teams): Uses consecutive idle event
   counting (no task system scan). If the interviewer stalls without sending a protocol
   message (QUESTIONS, DRAFT UPDATED, or CLEARANCE ACHIEVED), fires a continuation prompt

@@ -229,6 +229,8 @@ Do NOT include dynamic content (notepad entries, codebase context) in the native
 | Task claimed by builder | `in_progress` | `{ owner: "builder-N" }` |
 | Verification passed + committed | `completed` | `{ fpStatus: "COMPLETED", iterations: "n/max", commit: "hash", summary: "text" }` |
 | Max iterations reached | `completed` | `{ fpStatus: "FAILED", iterations: "max/max", reason: "text" }` |
+| Builder finished implementation | `in_progress` | `{ fpStatus: "AWAITING_VERIFICATION" }` |
+| Verification failed, retry cycle | `in_progress` | `{ fpStatus: "IMPLEMENTING" }` |
 | Blocked by failed dependency | `deleted` | `{ fpStatus: "SKIPPED", reason: "Blocked by {planTaskId}" }` |
 
 **Why `completed` for FAILED?** Native statuses are `pending`, `in_progress`, `completed`, `deleted`. Marking a failed task `completed` causes the native system to auto-clear `blockedBy` on its dependents. The lead then immediately marks those dependents `deleted` (SKIPPED) before the next `TaskList()` call. `metadata.fpStatus` is the authoritative status for FAILED vs COMPLETED tasks.
@@ -916,4 +918,18 @@ Lifecycle:
 ```json
 { "nudge": { "enabled": true, "maxRetries": 3 } }
 ```
+
+### Verification Guard
+
+The nudge hook reads `fpStatus` from task metadata to distinguish "stuck implementing" from "waiting for verification":
+
+- **`fpStatus: "AWAITING_VERIFICATION"`** — Builder has sent `IMPLEMENTATION COMPLETE` and is waiting for the lead's verification response. The hook exits 0 (no nudge).
+- **`fpStatus: "IMPLEMENTING"`** (or absent) — Builder is actively implementing. If idle, this is a genuine stall and the hook fires the continuation prompt.
+
+Lifecycle:
+1. Builder finishes implementation → sets `fpStatus: "AWAITING_VERIFICATION"` (TaskUpdate, step 9)
+2. Builder sends `IMPLEMENTATION COMPLETE` (SendMessage, step 10)
+3. Lead spawns verifier, gets result
+4. If **VERIFICATION PASSED**: lead proceeds to commit (fpStatus becomes "COMPLETED" in Step 5.7)
+5. If **VERIFICATION FAILED**: lead resets `fpStatus: "IMPLEMENTING"` (Step 5.4), then sends failure details to builder. This re-enables nudging if the builder stalls during the retry.
 

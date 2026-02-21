@@ -266,7 +266,9 @@ Repeat the following loop until no tasks remain:
    Builder: {builderName}
    NativeId: {nativeTaskId}"
 8. Implement the task following ALL rules below.
-9. When done, send to "team-lead":
+9. When done, call TaskUpdate(taskId, metadata: { fpStatus: "AWAITING_VERIFICATION" }).
+   This signals to the nudge hook that you are legitimately waiting, not stalled.
+10. Immediately after step 9, send to "team-lead":
    "IMPLEMENTATION COMPLETE: {planTaskId}
 
    FILES_MODIFIED:
@@ -278,11 +280,11 @@ Repeat the following loop until no tasks remain:
    Include ALL files you created or modified. Use absolute paths.
    NOTEPAD_ENTRY is optional — only include if you discovered something genuinely useful.
    THIS MUST BE YOUR LAST TOOL CALL FOR THIS TURN. Do not call any other tool after SendMessage.
-10. YOUR TURN ENDS HERE. The SendMessage in step 9 must be the last tool call of your turn.
+11. YOUR TURN ENDS HERE. The SendMessage in step 10 must be the last tool call of your turn.
     The lead's response will arrive as the START of your next turn. When your next turn begins,
     read the lead's message and act accordingly:
     - "VERIFICATION PASSED: {planTaskId}" → loop back to step 1
-    - "VERIFICATION FAILED: {planTaskId}\n..." → fix the issues described, then re-send IMPLEMENTATION COMPLETE (which again ends your turn)
+    - "VERIFICATION FAILED: {planTaskId}\n..." → fix the issues described, then re-send IMPLEMENTATION COMPLETE (steps 9-10, which again ends your turn)
     - "MAX_ITERATIONS_REACHED: {planTaskId}" → loop back to step 1
     - "TASK_ALREADY_CLAIMED: {planTaskId}" → loop back to step 1
 
@@ -299,10 +301,14 @@ IMPLEMENTATION RULES:
 
 TURN PROTOCOL (strict termination rules):
 Every turn MUST end with exactly one of these SendMessage calls — no tool calls after it:
-1. "IMPLEMENTATION COMPLETE: {planTaskId}" (step 9 — awaiting verification)
+1. "IMPLEMENTATION COMPLETE: {planTaskId}" (step 10 — awaiting verification)
 2. "CLARIFICATION NEEDED: {planTaskId}" (asking lead to relay a question)
 3. "NO_MORE_TASKS: {builderName}" (no claimable tasks — going idle)
 4. "TASK_CLAIMED: {planTaskId}" is the ONE exception — continue to step 8 on the same turn.
+
+Strict pre-completion sequence:
+1. TaskUpdate(taskId, metadata: { fpStatus: "AWAITING_VERIFICATION" })  ← second-to-last tool call
+2. SendMessage("IMPLEMENTATION COMPLETE: ...")                          ← LAST tool call
 
 Forbidden actions after sending IMPLEMENTATION COMPLETE:
 - Do NOT call TaskList(), TaskGet(), or TaskUpdate()
@@ -311,12 +317,14 @@ Forbidden actions after sending IMPLEMENTATION COMPLETE:
 Your turn must end immediately after the SendMessage for IMPLEMENTATION COMPLETE.
 
 NUDGE RECOVERY (automatic re-injection):
-If you receive a message about stalling or idle detection, it means you went idle while still
-owning an in-progress task. This is an automatic recovery mechanism. When you receive it:
+If you receive a message about stalling or idle detection:
 1. Do NOT panic or start over from scratch.
-2. Call TaskGet on the task ID mentioned in the message to refresh your context.
-3. Continue implementing from where you left off.
-4. If you already sent IMPLEMENTATION COMPLETE, re-send it to team-lead.
+2. Do NOT call TaskList or attempt to claim a new task.
+3. Call TaskGet on the task ID mentioned in the message to refresh your context.
+4. If you already sent IMPLEMENTATION COMPLETE and are waiting for verification,
+   re-send IMPLEMENTATION COMPLETE to team-lead. Do NOT restart implementation
+   or claim a different task.
+5. Otherwise, continue implementing from where you left off.
 
 CLARIFICATION PROTOCOL (iteration 1 only, once per task):
 If you encounter a genuine ambiguity, send to "team-lead":
@@ -543,7 +551,7 @@ If activeBuilders is empty AND commitQueue is empty:
 
 **If VERIFICATION FAILED:**
 - If `iterationMap[planTaskId] >= iterationMaxMap[planTaskId]`: go to Step 5.8.
-- Else: increment `iterationMap[planTaskId]`. Persist: read `execution-state.json`, update `iterationMap[planTaskId]`, write back. Send to builder:
+- Else: increment `iterationMap[planTaskId]`. Persist: read `execution-state.json`, update `iterationMap[planTaskId]`, write back. Reset fpStatus: `TaskUpdate(nativeId, metadata: { fpStatus: "IMPLEMENTING" })`. Send to builder:
   ```
   VERIFICATION FAILED: {planTaskId}
   Iteration: {n}/{iterationMaxMap[planTaskId]}
@@ -772,4 +780,4 @@ See [reference.md](./reference.md) for:
 - **Verification is lead-driven**: The lead spawns a fresh verification subagent (via Task tool) after each builder iteration. No hooks or persistent verifier teammate.
 - **User decides on failure**: When max iterations are reached, always ask the user.
 - **progress.md is generated once at Step 6**: Not a runtime artifact. Generated as a human-readable snapshot at the end.
-- **Nudge mechanism**: A TeammateIdle hook (`hooks/nudge-teammate.sh`) detects when builders stall (go idle while owning an in_progress task) and re-injects a continuation prompt. After `nudge.maxRetries` (default: 3) re-injections with no progress, the hook stops. Configurable via `.fractal-planner/config.json` `nudge` section.
+- **Nudge mechanism**: A TeammateIdle hook (`hooks/nudge-teammate.sh`) detects when builders stall (go idle while owning an in_progress task) and re-injects a continuation prompt. The hook respects `fpStatus: "AWAITING_VERIFICATION"` in task metadata — builders waiting for verification are not nudged. After `nudge.maxRetries` (default: 3) re-injections with no progress, the hook stops. Configurable via `.fractal-planner/config.json` `nudge` section.
