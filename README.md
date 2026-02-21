@@ -1,10 +1,12 @@
-# Fractal Planner
+<img width="1792" height="592" alt="Gemini_Generated_Image_ybse1pybse1pybse(1)" src="https://github.com/user-attachments/assets/9a23570a-5f7b-45c7-8553-c689eb41f9ec" />
 
-A Claude Code plugin that turns a one-line goal into a structured plan and then builds it for you — with built-in verification at every step.
+---
+
+A Claude Code plugin that turns a vague request into a structured plan and then builds it for you — with built-in verification at every step.
 
 You describe what you want, Fractal Planner interviews you to fill in the gaps, researches your codebase, breaks the work into small tasks, and hands them off to builder agents that implement and verify each piece. You stay in the loop at the decisions that matter and skip the ones that don't.
 
-The key here is that plans are broken down into bite size "fractal" tasks to ensure each step is implemented correctly without context rot.
+The key here is that plans are broken down into bite size "fractal" tasks to ensure each step is implemented correctly without the risk of context rot.
 
 ## Installation & Requirements
 
@@ -15,7 +17,9 @@ Install from the Claude Code plugin marketplace:
 /plugin install fractal-planner@fractal-planner
 ```
 
-Enable Agent Teams in your Claude Code settings (`~/.claude/settings.json` or project `.claude/settings.json`):
+> [!IMPORTANT]
+> This uses the new Agent Teams feature.
+> You must enable Agent Teams in your Claude Code settings (`~/.claude/settings.json` or project `.claude/settings.json`):
 
 ```json
 {
@@ -90,10 +94,9 @@ You won't normally need these, but they can sometimes come in handy.
 
 Fractal Planner uses a layered JSON config system. Settings are merged in order (highest priority wins):
 
-1. **Runtime overrides**
-2. **Project config** — `.fractal-planner/config.json` in your project root
-3. **User config** — `$XDG_CONFIG_HOME/fractal-planner/config.json` (defaults to `~/.config/fractal-planner/config.json`)
-4. **Built-in defaults**
+1. **Project config** — `.fractal-planner/config.json` in your project root
+2. **User config** — `$XDG_CONFIG_HOME/fractal-planner/config.json` (defaults to `~/.config/fractal-planner/config.json`)
+3. **Built-in defaults**
 
 All fields are optional. Only include values you want to override:
 
