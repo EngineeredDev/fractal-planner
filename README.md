@@ -14,7 +14,7 @@ Install from the Claude Code plugin marketplace:
 
 ```
 /plugin marketplace add EngineeredDev/fractal-planner
-/plugin install fractal-planner@fractal-planner
+/plugin install fractal-planner@engineereddev
 ```
 
 > [!IMPORTANT]
