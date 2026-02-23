@@ -1,6 +1,6 @@
 {
   "name": "fractal-planner",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Iterative planning and execution framework that decomposes features into fractal tasks with builder/verifier agent teams",
   "author": {
     "name": "EngineeredDev",
