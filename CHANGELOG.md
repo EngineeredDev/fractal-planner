@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.4 (2026-02-23)
+
+### Bug Fixes
+- change name and back to npm
+
+
 ## 0.1.3 (2026-02-23)
 
 
