@@ -6,6 +6,7 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 PACKAGE_JSON="$ROOT_DIR/package.json"
 PLUGIN_JSON="$ROOT_DIR/.claude-plugin/plugin.json"
+MARKETPLACE_JSON="$ROOT_DIR/.claude-plugin/marketplace.json"
 CHANGELOG="$ROOT_DIR/CHANGELOG.md"
 
 current_version=$(jq -r '.version' "$PACKAGE_JSON")
@@ -151,7 +152,7 @@ echo ""
 echo "All checks passed"
 
 # 5. Commit and tag
-git -C "$ROOT_DIR" add "$PACKAGE_JSON" "$PLUGIN_JSON" "$CHANGELOG"
+git -C "$ROOT_DIR" add "$PACKAGE_JSON" "$PLUGIN_JSON" "$MARKETPLACE_JSON" "$CHANGELOG"
 git -C "$ROOT_DIR" commit -m "v$VERSION"
 git -C "$ROOT_DIR" tag "v$VERSION"
 

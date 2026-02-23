@@ -56,7 +56,7 @@ if [[ "$CLI_RUNNER" == "bun" ]] && [[ -f "$CLI_DIR/load-config.ts" ]]; then
 elif [[ -f "$CLI_DIR/load-config.js" ]]; then
   CONFIG_JSON=$("$CLI_RUNNER" "$CLI_DIR/load-config.js" 2>/dev/null || echo '{"_error":"config load failed"}')
 else
-  CONFIG_JSON='{"_error":"load-config not found"}'
+  CONFIG_JSON='{"_error":"load-config not found — run bun run build or install bun (dist/cli/ is required for node)"}'
 fi
 
 # --- Output ---
