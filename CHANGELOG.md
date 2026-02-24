@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.5 (2026-02-24)
+
+### Bug Fixes
+- move to optionalDependencies
+
+
 ## 0.1.4 (2026-02-23)
 
 ### Bug Fixes
