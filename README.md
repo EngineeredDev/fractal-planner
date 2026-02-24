@@ -98,70 +98,61 @@ Fractal Planner uses a layered JSON config system. Settings are merged in order 
 2. **User config** — `$XDG_CONFIG_HOME/fractal-planner/config.json` (defaults to `~/.config/fractal-planner/config.json`)
 3. **Built-in defaults**
 
-All fields are optional. Only include values you want to override:
+All fields are optional. It is only necessary to include values you want to override.
 
-```json
+### Full default config
+
+All fields are shown with their defaults. JSONC (JSON with comments) for readability — strip comments for actual use.
+
+```jsonc
 {
-  "maxComplexity": 3,
-  "permissionMode": "bypassPermissions"
-}
-```
+  "maxComplexity": 3,          // 1–10; tasks above this get decomposed further
+  "maxIterations": 3,          // max builder → verifier loops per task
+  "maxParallelTasks": 1,       // concurrent builder agents
+  "executionOrder": "document-order", // "risk-first", "easy-first", or "document-order"
+  "permissionMode": "default", // "default" | "acceptEdits" | "bypassPermissions" | "plan" | "delegate" | "dontAsk"
+  "plansDir": ".fractal-planner/plans",
+  "cliRunner": "auto",         // "auto" (detect bun, fall back to node) | "bun" | "node"
 
-### Options
+  "preAnalysis": true,
+  "researchOnly": false,       // stop after research phase
+  "planOnly": false,           // stop after planning, skip execution
+  "skipApproachReview": false,
+  "skipPlanReview": false,
+  "noCommit": false,           // skip automatic git commits after task completion
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `maxComplexity` | `1-10` | `3` | Complexity threshold — tasks above this are decomposed further |
-| `maxIterations` | `integer >= 1` | `3` | Max builder/verifier loops per task |
-| `maxParallelTasks` | `integer >= 1` | `1` | Max concurrent builder agents |
-| `researchOnly` | `boolean` | `false` | Stop after the research phase |
-| `planOnly` | `boolean` | `false` | Stop after planning, skip execution |
-| `skipPlanReview` | `boolean` | `false` | Skip user review of the generated plan |
-| `skipApproachReview` | `boolean` | `false` | Skip pre-decomposition approach review |
-| `preAnalysis` | `boolean` | `true` | Run pre-analysis before interview |
-| `noCommit` | `boolean` | `false` | Skip automatic git commits after task completion |
-| `plansDir` | `string` | `".fractal-planner/plans"` | Directory for plan artifacts |
-| `permissionMode` | `string` | `"default"` | Permission mode for agents. One of: `default`, `acceptEdits`, `bypassPermissions`, `plan`, `delegate`, `dontAsk` |
-| `cliRunner` | `string` | `"auto"` | How CLI helpers are invoked: `auto` (detect bun, fall back to node), `bun`, or `node` |
-| `executionOrder` | `string` | `"document-order"` | Task execution order: `risk-first`, `easy-first`, or `document-order` |
-
-### Iteration Scaling
-
-Controls how `maxIterations` scales with task complexity:
-
-```json
-{
   "iterationScaling": {
     "enabled": true,
     "base": 2,
-    "factor": 0.8
-  }
-}
-```
+    "factor": 0.8              // how maxIterations scales with task complexity
+  },
 
-### Comment Checker Hook
-
-A PostToolUse hook that warns when Claude adds unnecessary comments to code. Uses tree-sitter AST parsing (30+ languages).
-
-```json
-{
+  // PostToolUse hook — warns when Claude adds unnecessary comments (tree-sitter AST, 30+ languages)
   "commentChecker": {
     "enabled": true,
-    "binaryPath": "/optional/explicit/path",
-    "customPrompt": "Optional prompt with {{comments}} placeholder"
-  }
-}
-```
+    "binaryPath": "",          // optional explicit path to the comment-checker binary
+    "customPrompt": ""         // optional prompt; use {{comments}} placeholder
+  },
 
-### Nudge Mechanism
-
-A TeammateIdle hook that detects stalled builder agents during `/fp:implement` and re-injects continuation prompts.
-
-```json
-{
+  // TeammateIdle hook — detects stalled builders and re-injects continuation prompts
   "nudge": {
     "enabled": true,
-    "maxRetries": 3
+    "maxRetries": 3            // 1–10; give up after this many nudges
+  },
+
+  // per-agent model overrides — omit a key to keep the agent's default
+  "models": {
+    // "analyst": "sonnet",
+    // "interviewer": "sonnet",
+    // "researcher": "sonnet",
+    // "contextBuilder": "sonnet",
+    // "decomposer": "sonnet",
+    // "critic": "sonnet",
+    // "linearSync": "sonnet",
+    // "tracker": "sonnet",
+    // "builder": "sonnet",
+    // "verifier": "sonnet",
+    // "committer": "sonnet"
   }
 }
 ```
@@ -189,7 +180,14 @@ Then add to `.fractal-planner/config.json`:
     "enabled": true,
     "teamId": "your-team-uuid",
     "projectId": "optional-project-uuid",
-    "userId": "optional-email-or-uuid-or-me"
+    "userId": "optional-email-or-uuid-or-me",
+    "statusMap": {
+      "pending": "Todo",
+      "in-progress": "In Progress",
+      "completed": "Done",
+      "failed": "Canceled",
+      "review": "In Review"
+    }
   }
 }
 ```
