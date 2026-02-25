@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.6 (2026-02-25)
+
+### Bug Fixes
+- try scoped plugin name
+
+
 ## 0.1.5 (2026-02-24)
 
 ### Bug Fixes
