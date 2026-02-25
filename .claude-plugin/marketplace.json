@@ -8,10 +8,10 @@
   },
   "plugins": [
     {
-      "name": "@engineereddev/fractal-planner",
+      "name": "fractal-planner",
       "source": {
         "source": "npm",
-        "package": "@engineereddev/fractal-planner"
+        "package": "fractal-planner"
       },
       "description": "Iterative planning and execution framework that decomposes features into fractal tasks with builder/verifier agent teams",
       "license": "MIT",
