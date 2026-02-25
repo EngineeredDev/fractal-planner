@@ -1,7 +1,7 @@
 ---
 name: fp-linear-sync
 description: Creates Linear issues mirroring the task tree from tasks.md, with user confirmation and status resolution.
-tools: AskUserQuestion, Read, Write, mcp__linear-server__create_issue, mcp__linear-server__list_issue_statuses, mcp__linear-server__list_teams
+tools: AskUserQuestion, Read, Write, mcp__linear-server__save_issue, mcp__linear-server__list_issue_statuses, mcp__linear-server__list_teams
 model: sonnet
 maxTurns: 25
 ---
@@ -63,7 +63,7 @@ Create issues in two passes so leaf issues follow execution order from `plan.md`
 
 #### Pass 1 — Parent (non-leaf) issues
 
-Walk the full task tree **top-down using BFS/level-order** (root → depth 1 → depth 2 → ...). Create a Linear issue for every **non-leaf** task (any task that has child tasks indented below it in `tasks.md`), regardless of depth. For each non-leaf task, call `mcp__linear-server__create_issue`:
+Walk the full task tree **top-down using BFS/level-order** (root → depth 1 → depth 2 → ...). Create a Linear issue for every **non-leaf** task (any task that has child tasks indented below it in `tasks.md`), regardless of depth. For each non-leaf task, call `mcp__linear-server__save_issue`:
 
 - `title`: task description
 - `team`: configured `teamId`
@@ -77,7 +77,7 @@ This ensures the full hierarchy is mirrored in Linear. For example, given a tree
 
 #### Pass 2 — Leaf issues in execution order
 
-Parse the numbered step list from `plan.md` to get the execution order. Iterate steps 1 through N. For each leaf task, look up its **immediate parent's** Linear issue ID from Pass 1 and create the leaf as a sub-issue of that parent. Call `mcp__linear-server__create_issue`:
+Parse the numbered step list from `plan.md` to get the execution order. Iterate steps 1 through N. For each leaf task, look up its **immediate parent's** Linear issue ID from Pass 1 and create the leaf as a sub-issue of that parent. Call `mcp__linear-server__save_issue`:
 
 - `title`: task description
 - `team`: configured `teamId`
