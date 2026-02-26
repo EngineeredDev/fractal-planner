@@ -13,6 +13,7 @@
         "source": "npm",
         "package": "fractal-planner"
       },
+      "version": "0.1.8",
       "description": "Iterative planning and execution framework that decomposes features into fractal tasks with builder/verifier agent teams",
       "license": "MIT",
       "keywords": ["planning", "agent-teams", "fractal", "task-decomposition", "claude-code"],
