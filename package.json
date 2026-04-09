@@ -1,6 +1,6 @@
 {
   "name": "fractal-planner",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "description": "Iterative planning and execution framework for Claude Code with fractal task decomposition and builder/verifier agent teams",
   "license": "MIT",
   "author": "EngineeredDev",
