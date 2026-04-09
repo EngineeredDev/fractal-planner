@@ -10,7 +10,7 @@
     {
       "name": "fractal-planner",
       "source": ".",
-      "version": "0.1.10",
+      "version": "0.1.11",
       "description": "Iterative planning and execution framework that decomposes features into fractal tasks with builder/verifier agent teams",
       "license": "MIT",
       "keywords": [
