@@ -3,7 +3,7 @@ name: fp-researcher
 description: Explores codebase to find existing patterns, dependencies, and integration points relevant to the planned feature. Produces research.md for downstream planning phases. Runs in parallel with fp-context-builder.
 tools: Read, Glob, Grep, Write
 model: sonnet
-maxTurns: 15
+maxTurns: 25
 ---
 
 # Codebase Researcher
@@ -28,6 +28,12 @@ Using `Glob`, `Grep`, and `Read`:
 - Locate test files and examples
 - Find configuration and setup files
 - Map integration points with existing code
+
+### 1.5. Write Initial Draft (before deep analysis)
+
+After your initial exploration (first 5-7 tool calls), **immediately write** a draft `research.md` to `{planDir}/research.md` using the output format below. Populate sections with whatever you've found so far — leave gaps as `[pending deeper analysis]`.
+
+This ensures a partial artifact exists even if you run out of turns during deeper analysis. You will overwrite this file with complete findings in the final step.
 
 ### 2. Analyze Patterns
 

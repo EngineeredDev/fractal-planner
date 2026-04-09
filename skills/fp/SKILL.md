@@ -142,7 +142,15 @@ Write pre-analysis.md to the plan directory."
 )
 ```
 
-After the analyst completes, read `.fractal-planner/plans/{planId}/pre-analysis.md` and extract:
+After the analyst completes, verify the output file exists:
+
+```bash
+test -f ".fractal-planner/plans/${planId}/pre-analysis.md" && echo "EXISTS" || echo "MISSING"
+```
+
+**If MISSING**: Set `preAnalysisFindings` to `null` and warn the user: "Pre-interview analyst did not produce pre-analysis.md (likely ran out of turns). Proceeding without pre-analysis findings." Continue to Step 5.
+
+**If EXISTS**: Read `.fractal-planner/plans/{planId}/pre-analysis.md` and extract:
 - `hiddenComplexityFlags` — key complexity findings
 - `riskItems` — high-risk areas
 - `ambiguityCandidates` — terms/choices needing clarification
@@ -491,9 +499,50 @@ Write context.md to the plan directory."
 )
 ```
 
-Both agents run in parallel. **Wait for both** to complete by calling TaskOutput on both task IDs in a single message (parallel blocking calls). Then read `research.md` and `context.md` from the plan directory.
+Both agents run in parallel. **Wait for both** to complete by calling TaskOutput on both task IDs in a single message (parallel blocking calls).
 
-**If `researchOnly` (from Step 3) is true**: After both agents complete, read `research.md` and `context.md`, present a summary to the user, and stop.
+After both agents complete, verify both output files exist:
+
+```bash
+echo "research=$(test -f '.fractal-planner/plans/${planId}/research.md' && echo EXISTS || echo MISSING)" && echo "context=$(test -f '.fractal-planner/plans/${planId}/context.md' && echo EXISTS || echo MISSING)"
+```
+
+Handle missing files:
+- **If `research.md` is MISSING**: Warn the user: "Research agent did not produce research.md. Re-spawning with a focused prompt..." Re-spawn `fp-researcher` with a tighter prompt:
+  ```
+  Task(
+    subagent_type: "fp-researcher",
+    description: "Retry: write research findings immediately",
+    mode: "bypassPermissions",
+    prompt: "The previous research agent ran out of turns before writing its output.
+
+  Goal: <goal text>
+  Interview Findings: <paste interview.json contents>
+  Plan directory: .fractal-planner/plans/<planId>
+
+  IMPORTANT: You have limited turns. Write research.md IMMEDIATELY with whatever you can gather in 3-5 tool calls. Focus on: relevant files, existing patterns, and integration points. Do NOT do exhaustive exploration — a partial research file is better than none."
+  )
+  ```
+  After the retry completes, check again. If still missing, write a minimal `research.md` yourself: `"# Research Findings\n\nResearch phase did not complete. Downstream phases should rely on interview findings."`
+
+- **If `context.md` is MISSING**: Warn the user: "Context builder did not produce context.md. Re-spawning with a focused prompt..." Re-spawn `fp-context-builder` with a tighter prompt:
+  ```
+  Task(
+    subagent_type: "fp-context-builder",
+    description: "Retry: write context summary immediately",
+    mode: "bypassPermissions",
+    prompt: "The previous context builder ran out of turns before writing its output.
+
+  Plan directory: .fractal-planner/plans/<planId>
+
+  IMPORTANT: You have limited turns. Read package.json and write context.md IMMEDIATELY with whatever you find. A minimal context file is better than none."
+  )
+  ```
+  After the retry completes, check again. If still missing, write a minimal `context.md` yourself: `"# Codebase Context\n\nContext building phase did not complete. Builders should explore the codebase directly."`
+
+- **If both exist**: Proceed normally — read both files from the plan directory.
+
+**If `researchOnly` (from Step 3) is true**: After both agents complete and files are verified, read `research.md` and `context.md`, present a summary to the user, and stop.
 
 ## Step 6.5: Approach Review Gate
 
@@ -589,6 +638,16 @@ Plan directory: .fractal-planner/plans/<planId>
 Write tasks.md to the plan directory."
 )
 ```
+
+After the decomposer completes, verify the output file exists:
+
+```bash
+test -f ".fractal-planner/plans/${planId}/tasks.md" && echo "EXISTS" || echo "MISSING"
+```
+
+**If MISSING**: This is a critical failure — decomposition cannot proceed without a task tree. Warn the user: "Decomposer did not produce tasks.md. Re-spawning..." Re-spawn the decomposer with the same inputs. If the second attempt also fails to produce the file, report a clear error and stop: "Decomposition failed twice — the task may be too complex for automated decomposition. Consider breaking your goal into smaller pieces and running /fp:plan on each."
+
+**If EXISTS**: Proceed to Step 7.25.
 
 ## Step 7.25: Compute Complexity Signals
 
@@ -690,7 +749,15 @@ Read both files and write critique.md to the plan directory."
 )
 ```
 
-After the critic completes, read `.fractal-planner/plans/{planId}/critique.md`. Parse the `Overall Result` line to extract:
+After the critic completes, verify the output file exists:
+
+```bash
+test -f ".fractal-planner/plans/${planId}/critique.md" && echo "EXISTS" || echo "MISSING"
+```
+
+**If MISSING**: The plan is structurally valid (it passed validate-tasks) but was not quality-reviewed. Warn the user: "Critic agent did not produce critique.md (likely ran out of turns). Proceeding without quality review." Set `critiqueResult` to `WARN` and `critiqueWarnings` to `["Critique phase did not complete — plan was not quality-reviewed"]`. Skip to Step 8.
+
+**If EXISTS**: Read `.fractal-planner/plans/{planId}/critique.md`. Parse the `Overall Result` line to extract:
 - `critiqueResult`: PASS, WARN, or FAIL
 - `failCount` and `warnCount` from the CRITIQUE COMPLETE output or the critique.md summary
 
@@ -851,7 +918,7 @@ If `planOnly` (from Step 3) is true, note that execution was skipped per config.
 - Approach review gate (Step 6.5) fires unless `skipApproachReview === true` — reviews high-level approach before expensive decomposition; distinct from Step 9 which reviews the final task tree
 - **NEVER** skip the interview — even for trivial tasks
 - Pass data between phases via the plan directory files
-- Each agent writes its own artifacts — do not write their files for them
+- Each agent writes its own artifacts. If an agent fails to produce its output file (check with `test -f`), follow the recovery protocol defined in the relevant step (re-spawn with focused prompt, or fall back to a minimal placeholder)
 - Confirmation gate (Step 9) fires for ALL users unless `skipPlanReview === true` in config
 - Step 9 options adapt based on `linear.enabled` — Linear-specific options only shown when Linear is configured
 - Linear sync (Step 10) must run in the **foreground** — never use `run_in_background`

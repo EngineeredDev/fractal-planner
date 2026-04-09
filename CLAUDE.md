@@ -36,8 +36,11 @@ Run a single test file: `bun test src/__tests__/config.test.ts`
 Subagents spawned by `/fp:plan` orchestrator:
 
 - **`fp-interviewer`** — Phase 0: conducts requirements interview as a **teammate** (not subagent) using the lead-relay pattern. Sends questions to the lead via `SendMessage`; the lead relays them to the user via `AskUserQuestion`. Writes `interview.json` + `interview.md`. Tools: `SendMessage, Read, Write, Edit, Glob, Grep`. MaxTurns: 30. The spawn prompt is inlined in `skills/fp/SKILL.md` Step 5b; the agent file is kept as reference.
-- **`fp-researcher`** — Phase 1: explores codebase, writes `research.md` + `context.md`. Tools: `Read, Glob, Grep, Write`. Model: sonnet. MaxTurns: 20.
-- **`fp-decomposer`** — Phase 2: fractal task decomposition, writes `tasks.md`. Tools: `Read, Grep, Write`. Model: sonnet. MaxTurns: 15.
+- **`fp-researcher`** — Phase 1: explores codebase, writes `research.md` for downstream planning phases. Runs in parallel with fp-context-builder. Tools: `Read, Glob, Grep, Write`. Model: sonnet. MaxTurns: 25.
+- **`fp-context-builder`** — Phase 1: builds a static codebase context summary (`context.md`) independently of feature research. Runs in parallel with fp-researcher. Tools: `Read, Glob, Grep, Write`. Model: sonnet. MaxTurns: 20.
+- **`fp-analyst`** — Phase 0.5: pre-interview codebase analyst for complex intents. Performs a targeted deep scan to identify hidden complexity, risks, and ambiguities before the requirements interview. Writes `pre-analysis.md`. Tools: `Read, Glob, Grep, Write`. Model: sonnet. MaxTurns: 23.
+- **`fp-decomposer`** — Phase 2: fractal task decomposition, writes `tasks.md`. Tools: `Read, Grep, Write`. Model: sonnet. MaxTurns: 20.
+- **`fp-critic`** — Phase 2.5: plan quality critic. Evaluates `tasks.md` against a 7-item rubric per leaf task. Writes `critique.md` with PASS/WARN/FAIL findings. Tools: `Read, Grep, Write`. Model: sonnet. MaxTurns: 20.
 - **`fp-linear-sync`** — Phase 3.5: creates Linear issues mirroring task tree in execution order from `plan.md` (conditional on config), writes `linear-mapping.json`. Tools: `AskUserQuestion, Read, Write, mcp__linear-server__*`. Model: sonnet. MaxTurns: 25.
 - **`fp-task-tracker`** — Implementation phase: passive progress recorder and Linear sync agent on `fp-impl-{planId}` team. Updates status columns in a pre-populated `progress.md` (lead writes the initial file) and syncs to Linear. Does not compute dependencies or write source code. Receives only task IDs — no descriptions, criteria, or file paths. Tools: `Read, Write, SendMessage, mcp__linear-server__update_issue`. Model: sonnet. MaxTurns: 50.
 

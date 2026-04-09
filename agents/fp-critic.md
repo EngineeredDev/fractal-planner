@@ -3,7 +3,7 @@ name: fp-critic
 description: Plan quality critic. Evaluates tasks.md against a 7-item rubric per leaf task. Outputs critique.md with PASS/WARN/FAIL findings.
 tools: Read, Grep, Write
 model: sonnet
-maxTurns: 15
+maxTurns: 20
 ---
 
 # Plan Quality Critic
@@ -28,6 +28,12 @@ Read both files from the plan directory:
 ### 2. Identify Leaf Tasks
 
 Extract all **leaf tasks** (tasks with no subtasks) from tasks.md. Only leaf tasks are evaluated against the per-task rubric items.
+
+### 2.5. Write Initial Scaffold
+
+After identifying all leaf tasks, **immediately write** a scaffold `critique.md` to `{planDir}/critique.md` with the overall structure (header, per-task sections with placeholder results). Set the overall result to `WARN` with a note: "Evaluation in progress — partial results."
+
+This ensures the orchestrator receives at least a structural critique file even if evaluation is interrupted. You will overwrite this with complete findings after the full evaluation.
 
 ### 3. Evaluate Each Leaf Task
 

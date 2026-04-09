@@ -3,7 +3,7 @@ name: fp-decomposer
 description: Breaks a root task into a fractal subtask tree with complexity ratings, acceptance criteria, dependencies, and file lists.
 tools: Read, Grep, Write
 model: sonnet
-maxTurns: 15
+maxTurns: 20
 ---
 
 # Fractal Decomposer
@@ -39,6 +39,12 @@ For each task with complexity > maxComplexity:
 - Define dependencies between subtasks
 
 Continue until ALL leaf tasks have complexity <= maxComplexity.
+
+### 2.5. Write Initial Tree (before leaf detail pass)
+
+Once you have the full tree structure with IDs, descriptions, and complexity ratings, **immediately write** `tasks.md` to `{planDir}/tasks.md` using the output format below. Include the tree hierarchy and any leaf task metadata you've already drafted. Mark incomplete leaves with `- Hints: [pending]` as a placeholder.
+
+This ensures a structural artifact exists for the orchestrator even if you run out of turns during the leaf detail pass. You will overwrite this file with the fully detailed tree in the final step.
 
 ### 3. Leaf Task Details
 

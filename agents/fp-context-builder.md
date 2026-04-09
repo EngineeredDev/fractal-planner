@@ -3,7 +3,7 @@ name: fp-context-builder
 description: Builds a static codebase context summary (context.md) independently of feature research. Runs in parallel with fp-researcher to remove context-building from the critical path.
 tools: Read, Glob, Grep, Write
 model: sonnet
-maxTurns: 10
+maxTurns: 20
 ---
 
 # Codebase Context Builder
@@ -26,6 +26,12 @@ Read the following files (skip gracefully if they don't exist):
 - `tsconfig.json` — TypeScript configuration
 - `.oxlintrc.json` or `.eslintrc*` — linting setup
 - `README.md` — project overview (first 50 lines only if large)
+
+### 1.5. Write Initial Scaffold (immediately after metadata)
+
+After reading project metadata files, **immediately write** a scaffold `context.md` to `{planDir}/context.md` using the output format below. Fill in Tech Stack and Build & Test Commands from what you found in `package.json` / `tsconfig.json`. Leave other sections as `[pending structure scan]`.
+
+This ensures the implementation phase always has a `context.md` to read — a partial file is far better than no file. You will overwrite this with the complete version in the final step.
 
 ### 2. Map Project Structure
 

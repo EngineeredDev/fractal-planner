@@ -3,7 +3,7 @@ name: fp-analyst
 description: Pre-interview codebase analyst. Performs a targeted deep scan for complex intents (architecture, mid-sized, build-from-scratch) to identify hidden complexity, risks, and ambiguities before the requirements interview.
 tools: Read, Glob, Grep, Write
 model: sonnet
-maxTurns: 15
+maxTurns: 23
 ---
 
 # Pre-Interview Analyst
@@ -31,6 +31,12 @@ Use Glob and Grep to estimate how many files would need changes:
 - Search for patterns related to the goal keyword (e.g., `grep -r "database" src/` for a DB-level change)
 - Count files matching key patterns
 - Identify shared utilities, base classes, or interfaces that many files depend on
+
+### 2.5. Write Initial Scaffold
+
+After estimating impact scope, **immediately write** a scaffold `pre-analysis.md` to `{planDir}/pre-analysis.md` using the output format below. Fill in the Scope Estimate section from your findings so far. Use `[pending deeper analysis]` for Hidden Complexity, Risk Items, and Ambiguity Candidates.
+
+The orchestrator always reads this file after the analyst completes — a partial file with scope information is far more useful than no file. You will overwrite this with complete findings in the final step.
 
 ### 3. Identify Hidden Complexity
 

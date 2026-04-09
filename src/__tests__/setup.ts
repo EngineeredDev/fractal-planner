@@ -1,6 +1,14 @@
 import { beforeEach, afterEach } from 'bun:test';
+import { mkdtempSync } from 'fs';
+import { join } from 'path';
+import { tmpdir } from 'os';
 import { resetConfig } from '../config';
 import type { Task, InterviewDraft, InterviewFindings } from '../types/index';
+
+// Isolate tests from real user config files by pointing XDG_CONFIG_HOME to an empty temp dir
+const originalXdgConfigHome = process.env.XDG_CONFIG_HOME;
+const testConfigHome = mkdtempSync(join(tmpdir(), 'fp-test-config-'));
+process.env.XDG_CONFIG_HOME = testConfigHome;
 
 // Global test setup - reset config between tests
 beforeEach(() => {
@@ -9,6 +17,7 @@ beforeEach(() => {
 
 afterEach(() => {
   resetConfig();
+  process.env.XDG_CONFIG_HOME = testConfigHome;
 });
 
 export function makeTask(overrides?: Partial<Task>): Task {
