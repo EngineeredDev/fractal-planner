@@ -143,7 +143,7 @@ fi
 
 echo "Generated changelog entry"
 
-# 4. Run checks
+# 4. Run checks and build
 echo ""
 echo "Running checks..."
 cd "$ROOT_DIR"
@@ -152,8 +152,12 @@ bun run lint && bun run typecheck && bun test
 echo ""
 echo "All checks passed"
 
+echo ""
+echo "Building dist/..."
+bun run build
+
 # 5. Commit and tag
-git -C "$ROOT_DIR" add "$PACKAGE_JSON" "$PLUGIN_JSON" "$MARKETPLACE_JSON" "$CHANGELOG"
+git -C "$ROOT_DIR" add "$PACKAGE_JSON" "$PLUGIN_JSON" "$MARKETPLACE_JSON" "$CHANGELOG" dist/
 git -C "$ROOT_DIR" commit -m "v$VERSION"
 git -C "$ROOT_DIR" tag "v$VERSION"
 

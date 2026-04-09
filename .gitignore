@@ -2,7 +2,6 @@
 node_modules/
 
 # Build output
-dist/
 *.tsbuildinfo
 skills/**/skill.js
 skills/**/skill.js.map
