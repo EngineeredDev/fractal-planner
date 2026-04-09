@@ -3,6 +3,8 @@ node_modules/
 
 # Build output
 *.tsbuildinfo
+dist/src/__tests__/
+dist/**/*.d.ts.map
 skills/**/skill.js
 skills/**/skill.js.map
 skills/**/skill.d.ts
