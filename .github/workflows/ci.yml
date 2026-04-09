@@ -39,3 +39,21 @@ jobs:
           cache: true
       - run: bun install
       - run: bun test
+
+  build-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+          cache: true
+      - run: bun install
+      - run: bun run build
+      - name: Verify dist/ is up to date
+        run: |
+          if [[ -n "$(git diff --name-only)" ]]; then
+            echo "::error::dist/ is out of date. Run 'bun run build' and commit the changes."
+            git diff --stat
+            exit 1
+          fi
